@@ -30,10 +30,10 @@ configuration files by hand.
 
 | Layer | Technology |
 |---|---|
-| Telephony engine | Asterisk 20 LTS (PJSIP, Realtime ODBC, AMI) |
-| Backend | Python 3.12, FastAPI, SQLAlchemy, panoramask |
+| Telephony engine | Asterisk  LTS (PJSIP, Realtime ODBC, AMI) |
+| Backend | Python , FastAPI, SQLAlchemy, panoramask |
 | Database | PostgreSQL 16 |
-| Frontend | React 18, Vite, Tailwind CSS |
+| Frontend | React, Vite, Tailwind CSS |
 | Mobile | Flutter, sip_ua, flutter_webrtc |
 | Deployment | Docker, Docker Compose |
 
@@ -72,4 +72,4 @@ configuration files by hand.
 
 ## License
 
-Academic project — Université Kasdi Merbah Ouargla, 2024–2025.
+Academic project — Université Kasdi Merbah Ouargla, 2026–2027.
