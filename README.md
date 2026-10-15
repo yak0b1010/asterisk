@@ -1,5 +1,17 @@
-#asterisk
 # Asterisk Management Appliance
+
+<!--toc:start-->
+
+- [Asterisk Management Appliance](#asterisk-management-appliance)
+  - [Architecture](#architecture)
+  - [Features](#features)
+  - [Tech Stack](#tech-stack)
+  - [Quick Start](#quick-start)
+  - [Project Structure](#project-structure)
+  - [Team](#team)
+  - [License](#license)
+
+<!--toc:end-->
 
 A professional IP-telephony management appliance built on **Asterisk**, packaged as a
 single-command Docker deployment. It provides a centralized web interface to deploy,
@@ -8,16 +20,18 @@ configuration files by hand.
 
 ## Architecture
 
-    Web UI (React)  →  Backend API (FastAPI)  →  PostgreSQL  →  Asterisk  →  SIP Clients
+```
+    Web UI (React)  →  Backend API (Go)  →  PostgreSQL  →  Asterisk  →  SIP Clients
                                                                               ↑
                                                                     Flutter mobile softphone
+```
 
 ## Features
 
 - **Web admin dashboard** — Asterisk status, extensions, registered phones, active calls, CPU/RAM/disk
 - **User & extension management** — CRUD, SIP passwords, live registration status
-- **Dialplan management** — numbering plan (100–199 Admin, 200–299 Finance, 300–399 IT, 400–499 Customer Service, 500–599 Management)
-- **Telephony services** — voicemail, call transfer, conference rooms, music on hold
+- **Dialplan management** — numbering plan (e.g. 100–199 Admin, 200–299 Finance, 300–399 IT, 400–499 Customer Service, 500–599 Management)
+- **Telephony services** — voicemail, call transfer, conference rooms.
 - **Call center** — queues, agents, distribution strategies, live queue statistics
 - **IVR builder** — interactive voice menus with configurable digit destinations
 - **Monitoring** — live supervision of Asterisk, extensions, calls, and system resources
@@ -28,6 +42,7 @@ configuration files by hand.
 
 ## Tech Stack
 
+<<<<<<< Updated upstream
 | Layer | Technology |
 |---|---|
 | Telephony engine | Asterisk  LTS (PJSIP, Realtime ODBC, AMI) |
@@ -36,39 +51,50 @@ configuration files by hand.
 | Frontend | React, Vite, Tailwind CSS |
 | Mobile | Flutter, sip_ua, flutter_webrtc |
 | Deployment | Docker, Docker Compose |
+=======
+| Layer            | Technology                               |
+| ---------------- | ---------------------------------------- |
+| Telephony engine | Asterisk LTS (PJSIP, Realtime ODBC, AMI) |
+| Backend          | Go, GoRM                                 |
+| Database         | PostgreSQL 18                            |
+| Frontend         | React, Vite, Tailwind CSS                |
+| Mobile           | Flutter, sip_ua, flutter_webrtc          |
+| Deployment       | Docker, Docker Compose                   |
+>>>>>>> Stashed changes
 
 ## Quick Start
 
-    git clone <repo-url>
-    cd appliance
+Assuming project is in clean state.
+
+```sh
+    git clone https://github.com/yak0b1010/asterisk.git
+    cd asterisk
     docker compose up -d
-    # → open http://localhost
-    # → login: admin / admin
+    # → open http://localhost:8080
+    # → login: e.g. admin / admin
+```
 
 ## Project Structure
 
-    appliance/
+```txt
+    appliance/             # Root directory
     ├── asterisk/          # Asterisk Docker image + config templates
     ├── backend/           # FastAPI application
-    │   └── app/
-    │       ├── api/       # HTTP routes
-    │       ├── core/      # security, config
-    │       ├── db/        # models, schema, session
-    │       └── services/  # AMI client, config generator
-    ├── frontend/          # React admin UI
+    ├── frontend/          # React Dashboard UI
     ├── softphone/         # Flutter mobile app
-    └── docker-compose.yml
+    └── docker-compose.yml # Cluster deployment
+```
 
 ## Team
 
-4 students — ASR2, Département d'Informatique, Université Kasdi Merbah Ouargla.
+4 students — NAS2, Department of Computer Science, University Kasdi Merbah Ouargla.
 
-| Member | Role |
-|---|---|
-| — | Telephony / Asterisk |
-| — | Backend / API / DB |
-| — | Web Frontend |
-| — | Mobile Softphone |
+| Member | Role                 |
+| ------ | -------------------- |
+| —      | Telephony / Asterisk |
+| —      | Backend / API / DB   |
+| —      | Web Frontend         |
+| —      | Mobile Softphone     |
 
 ## License
 
