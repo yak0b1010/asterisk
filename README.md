@@ -68,8 +68,8 @@ Assuming project is in clean state.
 ```txt
     appliance/             # Root directory
     ├── asterisk/          # Asterisk Docker image + config templates
-    ├── backend/           # FastAPI application
-    ├── frontend/          # React Dashboard UI
+    ├── backend/           # Go Backend application
+    ├── dashboard/         # React Dashboard UI
     ├── softphone/         # Flutter mobile app
     └── docker-compose.yml # Cluster deployment
 ```
