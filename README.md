@@ -31,8 +31,8 @@ configuration files by hand.
 | Layer | Technology |
 |---|---|
 | Telephony engine | Asterisk  LTS (PJSIP, Realtime ODBC, AMI) |
-| Backend | Python , FastAPI, SQLAlchemy, panoramask |
-| Database | PostgreSQL 16 |
+| Backend | go, GoRM
+| Database | PostgreSQL |
 | Frontend | React, Vite, Tailwind CSS |
 | Mobile | Flutter, sip_ua, flutter_webrtc |
 | Deployment | Docker, Docker Compose |
