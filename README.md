@@ -20,7 +20,7 @@ configuration files by hand.
 
 ## Architecture
 
-```
+```txt
     Web UI (React)  →  Backend API (Go)  →  PostgreSQL  →  Asterisk  →  SIP Clients
                                                                               ↑
                                                                     Flutter mobile softphone
@@ -42,16 +42,6 @@ configuration files by hand.
 
 ## Tech Stack
 
-<<<<<<< Updated upstream
-| Layer | Technology |
-|---|---|
-| Telephony engine | Asterisk  LTS (PJSIP, Realtime ODBC, AMI) |
-| Backend | go, GoRM
-| Database | PostgreSQL |
-| Frontend | React, Vite, Tailwind CSS |
-| Mobile | Flutter, sip_ua, flutter_webrtc |
-| Deployment | Docker, Docker Compose |
-=======
 | Layer            | Technology                               |
 | ---------------- | ---------------------------------------- |
 | Telephony engine | Asterisk LTS (PJSIP, Realtime ODBC, AMI) |
@@ -60,7 +50,6 @@ configuration files by hand.
 | Frontend         | React, Vite, Tailwind CSS                |
 | Mobile           | Flutter, sip_ua, flutter_webrtc          |
 | Deployment       | Docker, Docker Compose                   |
->>>>>>> Stashed changes
 
 ## Quick Start
 
