@@ -40,13 +40,16 @@ APP_TAG    := $(MODE)
 CONTAINER  := asterisk-$(MODE)
 
 SIP_PORT   := $(if $(strip $(SIP_PORT)),$(strip $(SIP_PORT)),5060)
-RTP_RANGE  := $(if $(strip $(RTP_RANGE)),$(strip $(RTP_RANGE)),10000-10499)
+RTP_RANGE  := $(if $(strip $(RTP_RANGE)),$(strip $(RTP_RANGE)),10000-10299)
 HTTP_PORT  := $(if $(strip $(HTTP_PORT)),$(strip $(HTTP_PORT)),8088)
 WSS_PORT   := $(if $(strip $(WSS_PORT)),$(strip $(WSS_PORT)),8089)
 
 VOL_LIB    := asterisk-$(MODE)-lib
 VOL_SPOOL  := asterisk-$(MODE)-spool
 VOL_LOG    := asterisk-$(MODE)-log
+VOL_KEYS      := asterisk-$(MODE)-keys
+VOL_SOUNDS    := asterisk-$(MODE)-sounds
+VOL_PHONEPROV := asterisk-$(MODE)-phoneprov
 
 ENV_FLAG   := $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),)
 
@@ -113,6 +116,9 @@ else
 	 $(ENV_FLAG) \
 	 --env RTP_RANGE=$(RTP_RANGE) \
 	 --mount type=volume,source=$(VOL_LIB),target=/var/lib/asterisk \
+	 --mount type=volume,source=$(VOL_KEYS),target=/var/lib/asterisk/keys \
+	 --mount type=volume,source=$(VOL_SOUNDS),target=/var/lib/asterisk/sounds \
+	 --mount type=volume,source=$(VOL_PHONEPROV),target=/var/lib/asterisk/phoneprov \
 	 --mount type=volume,source=$(VOL_SPOOL),target=/var/spool/asterisk \
 	 --mount type=volume,source=$(VOL_LOG),target=/var/log/asterisk \
 	 $(APP_IMAGE):$(APP_TAG)
@@ -157,3 +163,4 @@ shell: ## Open a shell inside the container
 clean: ## Remove built images and this mode's dev volumes
 	-docker rmi $(APP_IMAGE):standalone $(APP_IMAGE):realtime
 	-docker volume rm $(VOL_LIB) $(VOL_SPOOL) $(VOL_LOG)
+	-docker volume rm $(VOL_LIB) $(VOL_KEYS) $(VOL_SOUNDS) $(VOL_PHONEPROV) $(VOL_SPOOL) $(VOL_LOG)

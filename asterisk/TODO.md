@@ -20,7 +20,7 @@ Outstanding work for the PBX directory. Ordered by what blocks what.
       `ps_aors.sql`, `ps_endpoint_id_ips.sql`, `extensions.sql`, `voicemail.sql`,
       `queues.sql`, `cdr.sql` (source: Asterisk `contrib/realtime/postgresql/`, `22`
       branch). Mounted by the `postgres` service and only applied to an empty volume.
-- [ ] **TLS / WSS for the softphone** — `conf/base/http.conf` has the TLS block
+- [x] **TLS / WSS for the softphone** — `conf/base/http.conf` has the TLS block
       commented out and `pjsip.conf` has `transport-wss` commented out, so the Flutter
       softphone cannot connect over WSS yet. Requires a certificate in
       `/var/lib/asterisk/keys` and a decision on whether it is issued by the entrypoint
@@ -40,7 +40,7 @@ Outstanding work for the PBX directory. Ordered by what blocks what.
       in `.env`; a small target could resolve the newest certified digest.
 - [ ] **Image size pass** — check whether `odbc-postgresql` and sounds can be dropped for
       `standalone` builds to keep the test image small.
-- [ ] **Healthcheck** — the base image ships `healthcheck.sh`; confirm it is inherited
+- [x] **Healthcheck** — the base image ships `healthcheck.sh`; confirm it is inherited
       and behaving in both modes.
 
 ## 3. Runtime

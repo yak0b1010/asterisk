@@ -55,3 +55,5 @@ RUN set -eux; \
   chown -R asterisk:asterisk /etc/asterisk
 
 ENTRYPOINT ["/usr/local/bin/entrypoint-wrapper.sh"]
+
+CMD ["/usr/sbin/asterisk", "-vvvdddf", "-T", "-W", "-U", "asterisk", "-p"]
