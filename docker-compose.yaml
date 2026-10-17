@@ -1,0 +1,58 @@
+name: asterisk-appliance
+
+services:
+  # TODO: Needs check from Backend role
+  #
+  # postgres:
+  #   image: postgres:${POSTGRES_VERSION}
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME}
+  #     POSTGRES_USER: ${DB_USER}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #     - ./db/init:/docker-entrypoint-initdb.d:ro
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  asterisk:
+    image: ${ASTERISK_APP_IMAGE}:${ASTERISK_MODE}
+    build:
+      context: ./asterisk
+      args:
+        BASE_IMAGE: ${ASTERISK_IMAGE}:${ASTERISK_TAG}@${ASTERISK_DIGEST}
+        MODE: ${ASTERISK_MODE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${SIP_PORT}:5060/udp"
+      - "${SIP_PORT}:5060/tcp"
+      - "${RTP_RANGE}:${RTP_RANGE}/udp"
+      - "${HTTP_PORT}:8088"
+      - "${WSS_PORT}:8089"
+    environment:
+      ASTERISK_MODE: ${ASTERISK_MODE}
+      RTP_RANGE: ${RTP_RANGE}
+      AMI_PASSWORD: ${AMI_PASSWORD}
+      ARI_PASSWORD: ${ARI_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - asterisk-lib:/var/lib/asterisk
+      - asterisk-spool:/var/spool/asterisk
+      - asterisk-log:/var/log/asterisk
+
+volumes:
+  # pgdata:
+  asterisk-lib:
+  asterisk-spool:
+  asterisk-log:
