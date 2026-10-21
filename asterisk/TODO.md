@@ -3,72 +3,116 @@
 <!--toc:start-->
 
 - [TODO](#todo)
+  - [Rule](#rule)
   - [1. Configuration](#1-configuration)
   - [2. Image](#2-image)
   - [3. Runtime](#3-runtime)
-  - [4. Backend integration](#4-backend-integration)
-  - [5. Verification](#5-verification)
+  - [4. Firewall](#4-firewall)
+  - [5. Backend integration](#5-backend-integration)
+  - [6. Verification](#6-verification)
+  - [7. Documentation](#7-documentation)
 
 <!--toc:end-->
 
-Outstanding work for the PBX directory. Ordered by what blocks what.
+Outstanding work for the PBX directory.
+
+## Rule
+
+- [x] **Keep this file current.** Every change under `asterisk/` updates the
+      matching item here in the same commit. A PBX change is not finished
+      until this file reflects what was done and what remains.
 
 ## 1. Configuration
 
-- [ ] **Populate `db/init/`** — Asterisk's realtime SQL is not in the repository, so
-      `realtime` mode has no tables. Needed: `ps_endpoints.sql`, `ps_auths.sql`,
-      `ps_aors.sql`, `ps_endpoint_id_ips.sql`, `extensions.sql`, `voicemail.sql`,
-      `queues.sql`, `cdr.sql` (source: Asterisk `contrib/realtime/postgresql/`, `22`
-      branch). Mounted by the `postgres` service and only applied to an empty volume.
-- [x] **TLS / WSS for the softphone** — `conf/base/http.conf` has the TLS block
-      commented out and `pjsip.conf` has `transport-wss` commented out, so the Flutter
-      softphone cannot connect over WSS yet. Requires a certificate in
-      `/var/lib/asterisk/keys` and a decision on whether it is issued by the entrypoint
-      or mounted in.
-- [ ] **Confirm prompt coverage** — `conf/base/extensions.conf`/`standalone` reference
-      `hello-world`; verify the apt-installed sounds actually resolve under
-      `/var/lib/asterisk/sounds/en` inside the built image.
-- [ ] **Trim `conf/samples/`** — 106 reference files. Either keep as-is with the
-      reference-only caveat, or drop to a shortlist to shrink the repository.
+- [x] **UDP-only SIP.** Removed `transport-tcp`; `transport-udp` and
+      `transport-wss` remain. SIP/RTP firewall rules are UDP only.
+- [x] **Ports from `.env`.** `entrypoint-wrapper.sh` templates `SIP_PORT`,
+      `HTTP_PORT`, `WSS_PORT`, and `RTP_RANGE`; values no longer drift from
+      the firewall.
+- [ ] **Identity (`PBX_FQDN`).** Drives the container hostname and TLS CN.
+      Still missing: `from_domain` on standalone endpoints,
+      `disable_multi_domain`, and certificate SAN regeneration.
+- [ ] **TLS SANs.** Certificate includes CN, localhost and 127.0.0.1 only.
+      Add current host IPv4 SANs and a `.stamp` marker so a changed FQDN/IP
+      set regenerates the cert.
+- [ ] **AMI / ARI.** `AMI_PASSWORD` and `ARI_PASSWORD` are empty in
+      `.env.example`; both services stay disabled until set.
+- [ ] **RTP / NAT.** `PUBLIC_IP`, `external_media_address` and `local_net`
+      are unset; required for clients behind NAT or non-host networking.
+- [ ] **Realtime schema.** `realtime` mode has no `db/init` schema; tables are
+      Alembic-managed in `contrib/ast-db-manage/`.
+- [ ] **Realtime `from_domain`.** Add `ps_endpoints.from_domain` handling for
+      PostgreSQL-backed endpoints.
 
 ## 2. Image
 
-- [ ] **Verify the digest pin still resolves** — `andrius/asterisk` rebuilds on every
-      upstream release; confirm `make pull` still finds the pinned digest and bump
-      `.env` deliberately when upgrading.
-- [ ] **Automate the version bump** — currently the tag and digest must be edited by hand
-      in `.env`; a small target could resolve the newest certified digest.
-- [ ] **Image size pass** — check whether `odbc-postgresql` and sounds can be dropped for
-      `standalone` builds to keep the test image small.
-- [x] **Healthcheck** — the base image ships `healthcheck.sh`; confirm it is inherited
-      and behaving in both modes.
+- [x] **Pinned base image.** `ARG BASE_IMAGE` matches `.env`; `check-pin`
+      warns on drift.
+- [x] **Mode overlays.** `conf/base` + `conf/standalone` or `conf/realtime`.
+- [ ] **Dockerfile comment.** Line 11 has `ODBCARG MODE=standalone` fused into
+      the comment; split it into two lines.
+- [ ] **Healthcheck.** Confirm the base image still reports `healthy` with
+      host networking.
 
 ## 3. Runtime
 
-- [ ] **AMI/ARI bind scope** — `manager.conf` is generated with
-      `permit = 0.0.0.0/0.0.0.0` because the compose subnet is unknown. Narrow it once
-      the network layout is fixed.
-- [ ] **Certificate-free first run** — decide how `manager.conf`/`ari.conf` behave when
-      `AMI_PASSWORD`/`ARI_PASSWORD` are unset (currently: files are not written and the
-      interfaces stay disabled). Confirm that is the intended default.
-- [ ] **`external_media_address` injection** — RTP behind NAT still needs the host's
-      reachable address; not handled anywhere yet.
+- [x] **Idempotent lifecycle.** `up` starts an existing stopped container,
+      no-ops when running, creates when missing, recreates when dead.
+      `restart` uses `docker restart`; `recreate` removes with `-v` and
+      creates; `rebuild` builds then recreates.
+- [x] **No name conflict.** `make up` no longer fails with
+      `container name already in use`.
+- [x] **Host networking.** `--network host`, `--hostname`, `--add-host`.
+- [ ] **Hostname migration.** Existing containers created before
+      `--hostname` need one `make recreate`; `up` only warns.
 
-## 4. Backend integration
+## 4. Firewall
 
-- [ ] **Define the AMI/ARI contract** — which events the backend consumes (registration,
-      channel state, queue stats) versus which commands it issues (reload, originate).
-- [ ] **Realtime write path** — confirm the backend owns inserts/updates for
-      `ps_endpoints` and friends, and that a reload is triggered after each change.
-- [ ] **CDR/CEL to ODBC** — `extconfig.conf` covers dialplan, voicemail and queues;
-      `cdr_adaptive_odbc.conf` / `cel_adaptive_odbc.conf` are not authored yet, so call
-      records are not yet persisted.
+- [x] **Stable firewalld policy.** `FIREWALL_MODE=permanent` creates
+      `asterisk-appliance` with `ingress=ANY`, `egress=HOST`,
+      `target=CONTINUE`, priority `-100`. Zone-independent.
+- [x] **Temporary mode.** `FIREWALL_MODE=runtime` adds only to active zones;
+      lost on reload/reboot.
+- [x] **Kill switch.** `FIREWALL_ENABLED=no` makes `firewall`/`firewall-off`
+      no-ops.
+- [ ] **Legacy zone entries.** `nm-shared` still has permanent
+      `5060/tcp 5060/udp 8088-8089/tcp 10000-10199/udp` from the earlier
+      manual fix. Remove them after the policy is verified.
+- [ ] **Azure / ufw.** Provide the NSG/ufw equivalent; on Azure set
+      `FIREWALL_ENABLED=no` and open the ports in the NSG.
+- [ ] **WSS/TCP decision.** SIP/RTP are UDP-only, but 8088/8089/8080 remain
+      TCP for HTTP/WSS. Drop WSS if the Flutter app moves to UDP SIP.
 
-## 5. Verification
+## 5. Backend integration
 
-- [ ] **Standalone smoke test in CI or by hand** — `make test` plus a real call between
-      `1001` and `1002`.
-- [ ] **Realtime smoke test** — insert one `ps_endpoints` row, reload, and confirm the
-      endpoint appears via `pjsip show endpoint`.
-- [ ] **Port range check** — confirm the published UDP range matches `rtp show settings`
-      after start (the entrypoint is meant to guarantee this).
+- [ ] `backend/Dockerfile` and `dashboard/Dockerfile` are empty; the full
+      compose stack cannot build yet.
+- [ ] `docker-compose.yaml` still references a commented `postgres` service
+      in `depends_on`, publishes ports that conflict with host networking,
+      and lacks `hostname`, `extra_hosts`, `env_file`, and the keys/sounds/
+      phoneprov volumes.
+- [ ] Root `make up` currently delegates to the PBX; restore the full-stack
+      compose path when the backend/dashboard images exist.
+- [ ] `softphone/` is empty.
+
+## 6. Verification
+
+- [x] **Idempotency checks.** `up` twice, `down`/`up`, `restart`, `recreate`,
+      `firewall` twice, `firewall-off` twice.
+- [x] **UDP-only check.** `pjsip show transports` lists `transport-udp` and
+      `transport-wss`, no `transport-tcp`; `ss` shows 5060/udp only.
+- [ ] **Policy check.** `firewall-cmd --info-policy=asterisk-appliance` and
+      `--get-active-policies` after `make firewall`.
+- [ ] **Registration/audio.** Softphone Domain `asterisk.local`, Proxy
+      `10.42.0.1`; register 1001 and call 600.
+- [ ] **Hotspot test.** Remove the legacy `nm-shared` entries, reload, and
+      confirm registration still works through the policy.
+
+## 7. Documentation
+
+- [ ] `asterisk/README.md` is stale: says TLS/WSS are commented, lists
+      `5060/tcp`, and documents the old `scripts/` layout.
+- [ ] Root `README.md` still describes the full stack as the default
+      `make up`.
+- [ ] Add a firewall section: `FIREWALL_ENABLED`, `FIREWALL_MODE`,
+      permanent vs runtime, and the one-time `nm-shared` cleanup.
