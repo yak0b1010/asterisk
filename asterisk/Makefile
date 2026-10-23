@@ -115,7 +115,6 @@ check-pin: ## Warn when .env and the Dockerfile default disagree
 .PHONY: build build-standalone build-realtime
 build: check-pin ## Build the image (MODE from .env; override with MODE=realtime)
 	docker build \
-	 --pull \
 	 --build-arg BASE_IMAGE=$(BASE_REF) \
 	 --build-arg MODE=$(MODE) \
 	 -t $(APP_IMAGE):$(APP_TAG) \
@@ -260,6 +259,6 @@ run: firewall up ## Apply firewall rules, then start the PBX
 # ── Cleanup ───────────────────────────────────────────────────────────────
 .PHONY: clean
 clean: ## Remove the container, built images and this mode's volumes
-	-@docker rm -f -v $(CONTAINER) >/dev/null 2>&1
-	-@docker rmi $(APP_IMAGE):standalone $(APP_IMAGE):realtime >/dev/null 2>&1
-	-@docker volume rm $(VOL_LIB) $(VOL_KEYS) $(VOL_SOUNDS) $(VOL_PHONEPROV) $(VOL_SPOOL) $(VOL_LOG) >/dev/null 2>&1
+	-@docker rm -f -v $(CONTAINER) >/dev/null 2>&1 || true
+	-@docker rmi $(APP_IMAGE):standalone $(APP_IMAGE):realtime >/dev/null 2>&1 || true
+	-@docker volume rm $(VOL_LIB) $(VOL_KEYS) $(VOL_SOUNDS) $(VOL_PHONEPROV) $(VOL_SPOOL) $(VOL_LOG) >/dev/null 2>&1 || true
