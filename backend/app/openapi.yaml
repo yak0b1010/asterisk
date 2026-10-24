@@ -1,0 +1,1288 @@
+openapi: 3.0.3
+info:
+  title: Asterisk Appliance API
+  version: 1.0.0
+  description: |
+    REST API for the Asterisk Management Appliance. Configuration is stored in
+    PostgreSQL and mirrored into Asterisk realtime tables. AMI/ARI status
+    endpoints degrade gracefully when the control plane is not configured.
+
+    Authenticate with `POST /api/v1/auth/login`, then send
+    `Authorization: Bearer <access_token>` on every protected request.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Health
+  - name: Auth
+  - name: Dashboard
+  - name: Users
+  - name: Extensions
+  - name: Dialplan
+  - name: Voicemail
+  - name: Queues
+  - name: IVR
+  - name: Conferences
+  - name: CDR
+  - name: Monitoring
+  - name: Audit
+  - name: Settings
+  - name: Backups
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        "200":
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: asterisk-backend }
+                  version: { type: string }
+                  uptime_seconds: { type: number }
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe (checks PostgreSQL)
+      security: []
+      responses:
+        "200": { description: Ready }
+        "503": { description: Database unavailable }
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200":
+          description: Prometheus text exposition
+          content:
+            text/plain:
+              schema: { type: string }
+  /api/v1:
+    get:
+      tags: [Health]
+      summary: API metadata
+      security: []
+      responses:
+        "200": { description: API information }
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in and obtain tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, example: admin }
+                password: { type: string, format: password, example: admin12345 }
+      responses:
+        "200":
+          description: Access and refresh tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TokenEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: Too many login attempts }
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200": { description: New token pair }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke refresh tokens
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string, description: When omitted, all sessions are revoked }
+      responses:
+        "204": { description: Logged out }
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user and permissions
+      responses:
+        "200": { description: Profile }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [Auth]
+      summary: Update own profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string }
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Updated profile }
+  /api/v1/auth/me/password:
+    put:
+      tags: [Auth]
+      summary: Change own password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, format: password }
+                new_password: { type: string, format: password, minLength: 8 }
+      responses:
+        "200": { description: Password changed and sessions revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/auth/permissions:
+    get:
+      tags: [Auth]
+      summary: Effective permissions for the current role
+      responses:
+        "200": { description: Permission list }
+  /api/v1/auth/sessions:
+    get:
+      tags: [Auth]
+      summary: List active refresh sessions
+      responses:
+        "200": { description: Session list }
+  /api/v1/auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revoke one session
+      parameters:
+        - $ref: "#/components/parameters/UUIDPath"
+      responses:
+        "204": { description: Session revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Aggregated appliance statistics
+      responses:
+        "200": { description: Statistics }
+  /api/v1/dashboard/recent-calls:
+    get:
+      tags: [Dashboard]
+      summary: Most recent call detail records
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: disposition
+          in: query
+          schema: { type: string, example: ANSWERED }
+      responses:
+        "200": { description: Recent calls }
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: List users
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { type: string, enum: [admin, supervisor, agent, viewer] } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: User list }
+    post:
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 40 }
+                password: { type: string, format: password, minLength: 8 }
+                email: { type: string, format: email }
+                full_name: { type: string }
+                role: { type: string, enum: [admin, supervisor, agent, viewer], default: agent }
+                active: { type: boolean, default: true }
+      responses:
+        "201": { description: User created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UUIDPath"
+    get:
+      tags: [Users]
+      summary: Get a user
+      responses:
+        "200": { description: User }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Users]
+      summary: Replace user attributes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "200": { description: Updated user }
+    patch:
+      tags: [Users]
+      summary: Update user attributes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "200": { description: Updated user }
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      responses:
+        "204": { description: Deleted }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/users/{id}/password:
+    post:
+      tags: [Users]
+      summary: Reset a user password
+      parameters:
+        - $ref: "#/components/parameters/UUIDPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties:
+                new_password: { type: string, format: password, minLength: 8 }
+      responses:
+        "200": { description: Password reset }
+  /api/v1/users/{id}/extensions:
+    get:
+      tags: [Users]
+      summary: List extensions assigned to a user
+      parameters:
+        - $ref: "#/components/parameters/UUIDPath"
+      responses:
+        "200": { description: Extension list }
+  /api/v1/extensions:
+    get:
+      tags: [Extensions]
+      summary: List extensions
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: context, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+        - { name: voicemail, in: query, schema: { type: boolean } }
+        - { name: user_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Extension list }
+    post:
+      tags: [Extensions]
+      summary: Create an extension and mirror it to PJSIP realtime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExtensionCreate" }
+      responses:
+        "201": { description: Extension created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/extensions/registrations:
+    get:
+      tags: [Extensions]
+      summary: List PJSIP registrations from AMI
+      responses:
+        "200": { description: Registrations or a graceful not-configured response }
+  /api/v1/extensions/status:
+    get:
+      tags: [Extensions]
+      summary: Status of every enabled extension
+      responses:
+        "200": { description: Endpoint states }
+  /api/v1/extensions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ExtensionPath"
+    get:
+      tags: [Extensions]
+      summary: Get an extension by UUID or number
+      responses:
+        "200": { description: Extension }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Extensions]
+      summary: Update an extension
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExtensionUpdate" }
+      responses:
+        "200": { description: Updated extension }
+    patch:
+      tags: [Extensions]
+      summary: Update an extension
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExtensionUpdate" }
+      responses:
+        "200": { description: Updated extension }
+    delete:
+      tags: [Extensions]
+      summary: Delete an extension
+      responses:
+        "204": { description: Deleted }
+  /api/v1/extensions/{id}/status:
+    get:
+      tags: [Extensions]
+      summary: Live endpoint status
+      parameters:
+        - $ref: "#/components/parameters/ExtensionPath"
+      responses:
+        "200": { description: Endpoint status }
+  /api/v1/extensions/{id}/reload:
+    post:
+      tags: [Extensions]
+      summary: Ask Asterisk to reload PJSIP
+      parameters:
+        - $ref: "#/components/parameters/ExtensionPath"
+      responses:
+        "200": { description: Reload result or graceful not-configured response }
+  /api/v1/extensions/{id}/credentials:
+    get:
+      tags: [Extensions]
+      summary: Reveal SIP password and voicemail PIN
+      parameters:
+        - $ref: "#/components/parameters/ExtensionPath"
+      responses:
+        "200": { description: Credentials }
+  /api/v1/dialplan:
+    get:
+      tags: [Dialplan]
+      summary: List dialplan rules
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: context, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: enabled, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: Rule list }
+    post:
+      tags: [Dialplan]
+      summary: Create a dialplan rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DialplanRule" }
+      responses:
+        "201": { description: Rule created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/dialplan/contexts:
+    get:
+      tags: [Dialplan]
+      summary: List contexts with rule counts
+      responses:
+        "200": { description: Context list }
+  /api/v1/dialplan/export:
+    get:
+      tags: [Dialplan]
+      summary: Export enabled rules as extensions.conf
+      parameters:
+        - { name: context, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Generated configuration
+          content:
+            text/plain:
+              schema: { type: string }
+  /api/v1/dialplan/reload:
+    post:
+      tags: [Dialplan]
+      summary: Ask Asterisk to reload the dialplan
+      responses:
+        "200": { description: Reload result }
+  /api/v1/dialplan/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UUIDPath"
+    get:
+      tags: [Dialplan]
+      summary: Get a dialplan rule
+      responses:
+        "200": { description: Rule }
+    put:
+      tags: [Dialplan]
+      summary: Update a dialplan rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DialplanRule" }
+      responses:
+        "200": { description: Updated rule }
+    patch:
+      tags: [Dialplan]
+      summary: Update a dialplan rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DialplanRule" }
+      responses:
+        "200": { description: Updated rule }
+    delete:
+      tags: [Dialplan]
+      summary: Delete a dialplan rule
+      responses:
+        "204": { description: Deleted }
+  /api/v1/voicemail:
+    get:
+      tags: [Voicemail]
+      summary: List voicemail boxes
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: context, in: query, schema: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: Voicemail box list }
+    post:
+      tags: [Voicemail]
+      summary: Create a voicemail box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoicemailBox" }
+      responses:
+        "201": { description: Box created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/voicemail/reload:
+    post:
+      tags: [Voicemail]
+      summary: Ask Asterisk to reload voicemail
+      responses:
+        "200": { description: Reload result }
+  /api/v1/voicemail/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UUIDPath"
+    get:
+      tags: [Voicemail]
+      summary: Get a voicemail box
+      responses:
+        "200": { description: Box }
+    put:
+      tags: [Voicemail]
+      summary: Update a voicemail box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoicemailBox" }
+      responses:
+        "200": { description: Updated box }
+    patch:
+      tags: [Voicemail]
+      summary: Update a voicemail box
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VoicemailBox" }
+      responses:
+        "200": { description: Updated box }
+    delete:
+      tags: [Voicemail]
+      summary: Delete a voicemail box
+      responses:
+        "204": { description: Deleted }
+  /api/v1/queues:
+    get:
+      tags: [Queues]
+      summary: List queues
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+        - { name: strategy, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Queue list }
+    post:
+      tags: [Queues]
+      summary: Create a queue with members
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Queue" }
+      responses:
+        "201": { description: Queue created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/queues/status:
+    get:
+      tags: [Queues]
+      summary: Live queue statistics from AMI
+      responses:
+        "200": { description: Queue statistics }
+  /api/v1/queues/reload:
+    post:
+      tags: [Queues]
+      summary: Ask Asterisk to reload queues
+      responses:
+        "200": { description: Reload result }
+  /api/v1/queues/{id}:
+    parameters:
+      - $ref: "#/components/parameters/QueuePath"
+    get:
+      tags: [Queues]
+      summary: Get a queue by UUID or name
+      responses:
+        "200": { description: Queue with members }
+    put:
+      tags: [Queues]
+      summary: Update a queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Queue" }
+      responses:
+        "200": { description: Updated queue }
+    patch:
+      tags: [Queues]
+      summary: Update a queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Queue" }
+      responses:
+        "200": { description: Updated queue }
+    delete:
+      tags: [Queues]
+      summary: Delete a queue
+      responses:
+        "204": { description: Deleted }
+  /api/v1/queues/{id}/members:
+    parameters:
+      - $ref: "#/components/parameters/QueuePath"
+    get:
+      tags: [Queues]
+      summary: List queue members
+      responses:
+        "200": { description: Member list }
+    post:
+      tags: [Queues]
+      summary: Add a member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interface: { type: string, example: PJSIP/1001 }
+                extension: { type: string, example: "1001" }
+                member_name: { type: string }
+                penalty: { type: integer, minimum: 0, maximum: 100 }
+                paused: { type: boolean }
+      responses:
+        "201": { description: Member added }
+  /api/v1/queues/{id}/members/{memberID}:
+    parameters:
+      - $ref: "#/components/parameters/QueuePath"
+      - name: memberID
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Queues]
+      summary: Update a member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                member_name: { type: string }
+                penalty: { type: integer, minimum: 0, maximum: 100 }
+                paused: { type: boolean }
+      responses:
+        "200": { description: Updated member }
+    delete:
+      tags: [Queues]
+      summary: Remove a member
+      responses:
+        "204": { description: Member removed }
+  /api/v1/ivr:
+    get:
+      tags: [IVR]
+      summary: List IVR menus
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: IVR menu list }
+    post:
+      tags: [IVR]
+      summary: Create an IVR menu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IVRMenu" }
+      responses:
+        "201": { description: Menu created }
+  /api/v1/ivr/{id}:
+    parameters:
+      - $ref: "#/components/parameters/IVRPath"
+    get:
+      tags: [IVR]
+      summary: Get an IVR menu
+      responses:
+        "200": { description: Menu }
+    put:
+      tags: [IVR]
+      summary: Update an IVR menu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IVRMenu" }
+      responses:
+        "200": { description: Updated menu }
+    patch:
+      tags: [IVR]
+      summary: Update an IVR menu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IVRMenu" }
+      responses:
+        "200": { description: Updated menu }
+    delete:
+      tags: [IVR]
+      summary: Delete an IVR menu
+      responses:
+        "204": { description: Deleted }
+  /api/v1/ivr/{id}/options:
+    put:
+      tags: [IVR]
+      summary: Replace all options of an IVR menu
+      parameters:
+        - $ref: "#/components/parameters/IVRPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                options:
+                  type: array
+                  items: { $ref: "#/components/schemas/IVROption" }
+      responses:
+        "200": { description: Replaced options }
+  /api/v1/ivr/{id}/reload:
+    post:
+      tags: [IVR]
+      summary: Reload the dialplan containing the IVR
+      parameters:
+        - $ref: "#/components/parameters/IVRPath"
+      responses:
+        "200": { description: Reload result }
+  /api/v1/ivr/{id}/dialplan:
+    get:
+      tags: [IVR]
+      summary: Generate IVR dialplan text
+      parameters:
+        - $ref: "#/components/parameters/IVRPath"
+      responses:
+        "200":
+          description: Dialplan
+          content:
+            text/plain:
+              schema: { type: string }
+  /api/v1/conferences:
+    get:
+      tags: [Conferences]
+      summary: List conference rooms
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: search, in: query, schema: { type: string } }
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: Room list }
+    post:
+      tags: [Conferences]
+      summary: Create a conference room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConferenceRoom" }
+      responses:
+        "201": { description: Room created }
+  /api/v1/conferences/live:
+    get:
+      tags: [Conferences]
+      summary: List live conferences from AMI
+      responses:
+        "200": { description: Live conferences }
+  /api/v1/conferences/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ConferencePath"
+    get:
+      tags: [Conferences]
+      summary: Get a conference room
+      responses:
+        "200": { description: Room }
+    put:
+      tags: [Conferences]
+      summary: Update a conference room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConferenceRoom" }
+      responses:
+        "200": { description: Updated room }
+    patch:
+      tags: [Conferences]
+      summary: Update a conference room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConferenceRoom" }
+      responses:
+        "200": { description: Updated room }
+    delete:
+      tags: [Conferences]
+      summary: Delete a conference room
+      responses:
+        "204": { description: Deleted }
+  /api/v1/conferences/{id}/dialplan:
+    get:
+      tags: [Conferences]
+      summary: Generate conference dialplan text
+      parameters:
+        - $ref: "#/components/parameters/ConferencePath"
+      responses:
+        "200":
+          description: Dialplan
+          content:
+            text/plain:
+              schema: { type: string }
+  /api/v1/cdr:
+    get:
+      tags: [CDR]
+      summary: Search call detail records
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: from, in: query, schema: { type: string }, description: RFC3339 or YYYY-MM-DD }
+        - { name: to, in: query, schema: { type: string }, description: RFC3339 or YYYY-MM-DD }
+        - { name: src, in: query, schema: { type: string } }
+        - { name: dst, in: query, schema: { type: string } }
+        - { name: disposition, in: query, schema: { type: string } }
+        - { name: uniqueid, in: query, schema: { type: string } }
+        - { name: linkedid, in: query, schema: { type: string } }
+        - { name: accountcode, in: query, schema: { type: string } }
+        - { name: context, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: min_billsec, in: query, schema: { type: integer } }
+        - { name: sort, in: query, schema: { type: string, enum: [calldate, duration, billsec, src, dst, disposition] } }
+        - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        "200": { description: CDR list }
+    post:
+      tags: [CDR]
+      summary: Ingest a CDR (used by external collectors)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CDR" }
+      responses:
+        "201": { description: CDR created }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cdr/stats:
+    get:
+      tags: [CDR]
+      summary: Call statistics for the same filters as the list endpoint
+      responses:
+        "200": { description: Aggregated statistics }
+  /api/v1/cdr/export:
+    get:
+      tags: [CDR]
+      summary: Export matching CDRs as CSV
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv:
+              schema: { type: string }
+  /api/v1/cdr/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      tags: [CDR]
+      summary: Get one CDR
+      responses:
+        "200": { description: CDR }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [CDR]
+      summary: Delete one CDR
+      responses:
+        "204": { description: Deleted }
+  /api/v1/monitoring/status:
+    get:
+      tags: [Monitoring]
+      summary: Overall appliance health
+      responses:
+        "200": { description: Status }
+  /api/v1/monitoring/system:
+    get:
+      tags: [Monitoring]
+      summary: Host CPU, memory, disk and process information
+      responses:
+        "200": { description: System statistics }
+  /api/v1/monitoring/asterisk:
+    get:
+      tags: [Monitoring]
+      summary: AMI/ARI connectivity and Asterisk core status
+      responses:
+        "200": { description: Asterisk status }
+  /api/v1/monitoring/calls:
+    get:
+      tags: [Monitoring]
+      summary: Active calls via ARI or AMI
+      responses:
+        "200": { description: Active calls }
+  /api/v1/monitoring/endpoints:
+    get:
+      tags: [Monitoring]
+      summary: PJSIP endpoint states via ARI or AMI
+      responses:
+        "200": { description: Endpoint states }
+  /api/v1/monitoring/registrations:
+    get:
+      tags: [Monitoring]
+      summary: PJSIP registrations via AMI
+      responses:
+        "200": { description: Registrations }
+  /api/v1/monitoring/queues:
+    get:
+      tags: [Monitoring]
+      summary: Live queue statistics via AMI
+      responses:
+        "200": { description: Queue statistics }
+  /api/v1/monitoring/conferences:
+    get:
+      tags: [Monitoring]
+      summary: Live conference rooms via AMI
+      responses:
+        "200": { description: Conferences }
+  /api/v1/audit:
+    get:
+      tags: [Audit]
+      summary: Search the audit log
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: user_id, in: query, schema: { type: string, format: uuid } }
+        - { name: username, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: entity_type, in: query, schema: { type: string } }
+        - { name: entity_id, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: status_code, in: query, schema: { type: integer } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Audit entries }
+  /api/v1/audit/{id}:
+    get:
+      tags: [Audit]
+      summary: Get one audit entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200": { description: Audit entry }
+  /api/v1/settings:
+    get:
+      tags: [Settings]
+      summary: List settings
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Settings list }
+  /api/v1/settings/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string, example: pbx.name }
+    get:
+      tags: [Settings]
+      summary: Get a setting
+      responses:
+        "200": { description: Setting }
+    put:
+      tags: [Settings]
+      summary: Create or update a setting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {}
+                description: { type: string }
+      responses:
+        "200": { description: Saved setting }
+    delete:
+      tags: [Settings]
+      summary: Delete a setting
+      responses:
+        "204": { description: Deleted }
+  /api/v1/backups:
+    get:
+      tags: [Backups]
+      summary: List configuration backups
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - { name: status, in: query, schema: { type: string, enum: [running, completed, failed] } }
+      responses:
+        "200": { description: Backup list }
+    post:
+      tags: [Backups]
+      summary: Create a configuration backup
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                include_cdr: { type: boolean, default: false }
+      responses:
+        "201": { description: Backup created }
+  /api/v1/backups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UUIDPath"
+    get:
+      tags: [Backups]
+      summary: Get backup metadata
+      responses:
+        "200": { description: Backup metadata }
+    delete:
+      tags: [Backups]
+      summary: Delete a backup and its file
+      responses:
+        "204": { description: Deleted }
+  /api/v1/backups/{id}/download:
+    get:
+      tags: [Backups]
+      summary: Download the gzip-compressed JSON backup
+      parameters:
+        - $ref: "#/components/parameters/UUIDPath"
+      responses:
+        "200":
+          description: Backup file
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+  /api/v1/backups/{id}/restore:
+    post:
+      tags: [Backups]
+      summary: Restore configuration from a backup
+      parameters:
+        - $ref: "#/components/parameters/UUIDPath"
+      responses:
+        "200": { description: Restore completed }
+        "400": { description: Backup is not completed }
+        "500": { description: Restore failed }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    UUIDPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ExtensionPath:
+      name: id
+      in: path
+      required: true
+      description: Extension UUID or number
+      schema: { type: string }
+    QueuePath:
+      name: id
+      in: path
+      required: true
+      description: Queue UUID or name
+      schema: { type: string }
+    IVRPath:
+      name: id
+      in: path
+      required: true
+      description: IVR menu UUID or name
+      schema: { type: string }
+    ConferencePath:
+      name: id
+      in: path
+      required: true
+      description: Conference UUID or number
+      schema: { type: string }
+  responses:
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Resource already exists or conflicts with current state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}
+    TokenEnvelope:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: Bearer }
+        expires_in: { type: integer }
+        user: { $ref: "#/components/schemas/User" }
+        permissions:
+          type: array
+          items: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        full_name: { type: string }
+        role: { type: string, enum: [admin, supervisor, agent, viewer] }
+        active: { type: boolean }
+        last_login_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    UserUpdate:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        full_name: { type: string }
+        role: { type: string, enum: [admin, supervisor, agent, viewer] }
+        active: { type: boolean }
+    ExtensionCreate:
+      type: object
+      required: [number]
+      properties:
+        number: { type: string, example: "1001" }
+        display_name: { type: string }
+        user_id: { type: string, format: uuid }
+        context: { type: string, default: internal }
+        codecs: { type: string, default: ulaw,alaw,opus,g722 }
+        sip_password: { type: string, description: Generated when omitted }
+        caller_id: { type: string }
+        voicemail_enabled: { type: boolean, default: false }
+        voicemail_pin: { type: string, description: Required when voicemail is enabled }
+        enabled: { type: boolean, default: true }
+        description: { type: string }
+    ExtensionUpdate:
+      type: object
+      properties:
+        display_name: { type: string }
+        user_id: { type: string, format: uuid, nullable: true }
+        context: { type: string }
+        codecs: { type: string }
+        sip_password: { type: string }
+        caller_id: { type: string }
+        voicemail_enabled: { type: boolean }
+        voicemail_pin: { type: string }
+        enabled: { type: boolean }
+        description: { type: string }
+    DialplanRule:
+      type: object
+      properties:
+        context: { type: string, default: internal }
+        pattern: { type: string, example: "1001" }
+        priority: { type: integer, minimum: 1, default: 1 }
+        app: { type: string, example: Dial }
+        app_data: { type: string, example: PJSIP/1001 }
+        description: { type: string }
+        enabled: { type: boolean, default: true }
+    VoicemailBox:
+      type: object
+      properties:
+        extension: { type: string }
+        context: { type: string, default: internal }
+        name: { type: string }
+        email: { type: string, format: email }
+        pin: { type: string, description: 4-8 digits, write-only unless the caller can read credentials }
+        timezone: { type: string }
+        max_messages: { type: integer, default: 50 }
+        active: { type: boolean, default: true }
+    Queue:
+      type: object
+      properties:
+        name: { type: string }
+        strategy: { type: string, default: ringall }
+        timeout: { type: integer, default: 30 }
+        music_on_hold: { type: string }
+        ring_in_use: { type: boolean }
+        max_wait: { type: integer, default: 300 }
+        announce: { type: string }
+        announce_frequency: { type: integer }
+        description: { type: string }
+        active: { type: boolean, default: true }
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              interface: { type: string, example: PJSIP/1001 }
+              extension: { type: string }
+              member_name: { type: string }
+              penalty: { type: integer }
+              paused: { type: boolean }
+    IVRMenu:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        greeting_sound: { type: string, default: ivr-welcome }
+        invalid_sound: { type: string }
+        timeout: { type: integer, default: 5 }
+        max_attempts: { type: integer, default: 3 }
+        active: { type: boolean, default: true }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/IVROption" }
+    IVROption:
+      type: object
+      properties:
+        digit: { type: string, example: "1" }
+        destination_type: { type: string, enum: [extension, queue, voicemail, ivr, conference, playback] }
+        destination: { type: string }
+        description: { type: string }
+        sort_order: { type: integer }
+    ConferenceRoom:
+      type: object
+      properties:
+        number: { type: string, example: "800" }
+        name: { type: string }
+        pin: { type: string }
+        max_members: { type: integer, default: 10 }
+        muted: { type: boolean }
+        record: { type: boolean }
+        active: { type: boolean, default: true }
+        description: { type: string }
+    CDR:
+      type: object
+      properties:
+        calldate: { type: string, format: date-time }
+        clid: { type: string }
+        src: { type: string }
+        dst: { type: string }
+        dcontext: { type: string }
+        channel: { type: string }
+        dstchannel: { type: string }
+        lastapp: { type: string }
+        lastdata: { type: string }
+        duration: { type: integer }
+        billsec: { type: integer }
+        disposition: { type: string, enum: [ANSWERED, "NO ANSWER", BUSY, FAILED, CONGESTION, UNKNOWN] }
+        amaflags: { type: integer }
+        accountcode: { type: string }
+        uniqueid: { type: string }
+        userfield: { type: string }
+        peeraccount: { type: string }
+        linkedid: { type: string }
+        sequence: { type: integer }

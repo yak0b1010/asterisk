@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Service unavailable · Asterisk Control Center</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at 50% 0%, #0d1b2a 0%, #060a12 55%);
+        color: #e2e8f0;
+        padding: 2rem;
+      }
+      main {
+        max-width: 32rem;
+        text-align: center;
+      }
+      .badge {
+        display: inline-grid;
+        place-items: center;
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 1rem;
+        border: 1px solid rgb(16 185 129 / 0.25);
+        background: rgb(16 185 129 / 0.1);
+        color: #6ee7b7;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      h1 {
+        margin: 1.25rem 0 0;
+        font-size: 1.35rem;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0.5rem 0 0;
+        color: #94a3b8;
+        font-size: 0.875rem;
+        line-height: 1.65;
+      }
+      a {
+        display: inline-block;
+        margin-top: 1.5rem;
+        padding: 0.65rem 1.1rem;
+        border-radius: 0.65rem;
+        background: #10b981;
+        color: #022c22;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      code {
+        color: #cbd5e1;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="badge">!</span>
+      <h1>The control plane is temporarily unavailable</h1>
+      <p>
+        nginx could not reach the API or the request failed. Check that the backend
+        container is running and that <code>API_UPSTREAM</code> points at the correct
+        host and port.
+      </p>
+      <a href="/">Try again</a>
+    </main>
+  </body>
+</html>

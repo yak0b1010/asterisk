@@ -1,0 +1,32 @@
+# Standalone dashboard stack.
+#
+# Start the backend first:
+#   cd ../backend && docker compose up -d --build
+#
+# Then start this stack:
+#   docker compose up -d --build
+#
+# The dashboard joins the backend's default Compose network so the nginx
+# template can resolve the `api` service. If your backend stack uses another
+# project name, override BACKEND_NETWORK or set API_UPSTREAM to a reachable
+# host:port.
+
+name: asterisk-dashboard
+
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-api:8080}
+    ports:
+      - "${DASHBOARD_PORT:-3000}:80"
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
+    name: ${BACKEND_NETWORK:-asterisk-backend_default}

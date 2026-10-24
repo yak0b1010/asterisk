@@ -1,0 +1,267 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --color-canvas: #17191c;
+  --color-panel: #202327;
+  --color-panel-2: #26292e;
+  --color-line: rgb(255 255 255 / 0.12);
+  --color-brand-200: #f5f5f5;
+  --color-brand-300: #e5e5e5;
+  --color-brand-400: #d4d4d4;
+  --color-brand-500: #a3a3a3;
+  --color-brand-600: #737373;
+  --color-brand-700: #525252;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-neutral-200 antialiased;
+    min-height: 100vh;
+    background-color: #17191c;
+    background-image:
+      radial-gradient(ellipse 80% 55% at 50% -18%, rgb(255 255 255 / 0.07), transparent 62%),
+      radial-gradient(ellipse 60% 45% at 8% 6%, rgb(255 255 255 / 0.035), transparent 60%),
+      radial-gradient(ellipse 55% 45% at 100% 100%, rgb(255 255 255 / 0.025), transparent 60%),
+      linear-gradient(180deg, #1b1d21 0%, #17191c 52%, #191b1e 100%);
+    background-attachment: fixed;
+  }
+
+  #root {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: rgb(255 255 255 / 0.22);
+    color: #ffffff;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(255 255 255 / 0.55);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(163 163 163 / 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(163 163 163 / 0.3);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(163 163 163 / 0.45);
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-white/10 backdrop-blur-xl;
+    background-color: rgb(32 35 39 / 0.55);
+    background-image: linear-gradient(
+      155deg,
+      rgb(255 255 255 / 0.08),
+      rgb(255 255 255 / 0.02) 55%,
+      rgb(255 255 255 / 0.045)
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.08),
+      0 24px 60px -32px rgb(0 0 0 / 0.9);
+  }
+
+  .panel-muted {
+    @apply rounded-xl border border-white/[0.07] bg-white/[0.025] backdrop-blur-lg;
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-medium text-neutral-300;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs leading-relaxed text-neutral-500;
+  }
+
+  .table-head {
+    @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400;
+  }
+
+  .mono {
+    @apply font-mono tabular-nums;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-neutral-100 via-white to-neutral-400 bg-clip-text text-transparent;
+  }
+
+  .surface-grid {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-white/[0.06];
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.13),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.35s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.18s ease-out both;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.25s ease-out both;
+  }
+
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .stagger > * {
+    animation: fade-up 0.4s ease-out both;
+  }
+
+  .stagger > *:nth-child(1) {
+    animation-delay: 0.02s;
+  }
+
+  .stagger > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+
+  .stagger > *:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+
+  .stagger > *:nth-child(4) {
+    animation-delay: 0.14s;
+  }
+
+  .stagger > *:nth-child(5) {
+    animation-delay: 0.18s;
+  }
+
+  .stagger > *:nth-child(6) {
+    animation-delay: 0.22s;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .panel {
+    background-color: #202327;
+  }
+
+  .panel-muted {
+    background-color: #292c31;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0.35);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 5px rgb(255 255 255 / 0);
+  }
+}

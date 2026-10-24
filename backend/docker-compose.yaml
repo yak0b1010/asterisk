@@ -1,0 +1,80 @@
+name: asterisk-backend
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-18}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-astrisk}
+      POSTGRES_USER: ${DB_USER:-astrisk_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-12345678}
+    ports:
+      # Host port used by a locally running API.  The API container always
+      # talks to postgres:5432 over the Compose network.
+      - "${DB_PORT:-5232}:5432"
+    volumes:
+      # PostgreSQL 18 changed the default data directory.  Mount the parent
+      # directory so both old and new images initialise correctly.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${DB_USER:-astrisk_user} -d ${DB_NAME:-astrisk}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HTTP_ADDR: ":8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATA_DIR: /data
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-astrisk}
+      DB_USER: ${DB_USER:-astrisk_user}
+      DB_PASSWORD: ${DB_PASSWORD:-12345678}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-168h}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@asterisk.local}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173,http://localhost:3000}
+      ASTERISK_AMI_HOST: ${ASTERISK_AMI_HOST:-127.0.0.1}
+      ASTERISK_AMI_PORT: ${ASTERISK_AMI_PORT:-5038}
+      ASTERISK_AMI_USERNAME: ${ASTERISK_AMI_USERNAME:-backend}
+      ASTERISK_AMI_PASSWORD: ${ASTERISK_AMI_PASSWORD:-}
+      ASTERISK_ARI_URL: ${ASTERISK_ARI_URL:-http://127.0.0.1:8088/ari}
+      ASTERISK_ARI_USERNAME: ${ASTERISK_ARI_USERNAME:-asterisk}
+      ASTERISK_ARI_PASSWORD: ${ASTERISK_ARI_PASSWORD:-}
+      ASTERISK_TRANSPORT: ${ASTERISK_TRANSPORT:-transport-udp}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - api-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pgdata:
+  api-data:
