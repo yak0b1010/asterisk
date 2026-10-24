@@ -944,3 +944,6 @@ $RECYCLE.BIN/
 *.db-wal
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,windows,macos,vim,python,venv,backup,executable,flutter,dart,darteditor,react,reactnative,go,jetbrains,jetbrains+all,jetbrains+iml,visualstudiocode,git,doxygen,dotenv,database,data
+
+!dashboard/src/lib
+!dashboard/src/lib/**
