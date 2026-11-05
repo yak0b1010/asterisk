@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #16212b;
+  --color-ink-2: #223140;
+  --color-paper: #f3f4f1;
+  --color-line: #dcdfd8;
+  --color-signal: #c4701a;
+  --color-signal-dark: #a35a10;
+  --color-ok: #2f8f5b;
+  --color-bad: #b83b32;
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+body { @apply bg-paper text-ink antialiased; }
+:focus-visible { outline: 2px solid var(--color-signal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
