@@ -1,5 +1,7 @@
 import type { AuthUser, LoginResponse } from "../types";
 import { tokenStore } from "./client";
+import { mockCrud } from "./mock-crud";
+import { MockHttpError } from "./mock-errors";
 import { mockMetrics, mockSummary } from "./mock-data";
 
 // Mock accounts: admin/admin, operator/operator, viewer/viewer
@@ -11,11 +13,7 @@ const accounts: Record<string, { password: string; user: AuthUser }> = {
 
 const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
-export class MockHttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
+export { MockHttpError };
 
 /** Routes mock requests by "METHOD /path". Add new endpoints here as each step is built. */
 export async function mockRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -43,6 +41,6 @@ export async function mockRequest<T>(method: string, path: string, body?: unknow
     case "GET /system/metrics":
       return mockMetrics() as T;
     default:
-      throw new MockHttpError(404, `Mock endpoint not implemented: ${route}`);
+      return mockCrud<T>(method, path, body);
   }
 }

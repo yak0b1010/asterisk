@@ -42,3 +42,39 @@ export interface SystemMetrics {
   diskUsedGb: number;
   diskTotalGb: number;
 }
+
+/* ── Users & extensions ────────────────────────────────── */
+export type DepartmentId = "administration" | "finance" | "it" | "support" | "management";
+
+/** A person. GET/POST /users, GET/PUT/DELETE /users/:id */
+export interface DirectoryUser {
+  id: string;
+  fullName: string;
+  email: string;
+  department: DepartmentId;
+  createdAt: string; // ISO 8601
+}
+export type UserInput = Pick<DirectoryUser, "fullName" | "email" | "department">;
+
+/** A SIP endpoint. The SIP secret is write-only: it is never returned by the API. */
+export interface Extension {
+  number: string; // "100".."599"
+  userId: string | null;
+  enabled: boolean;
+  registered: boolean;
+  contactIp: string | null; // where the phone registered from, when registered
+}
+export interface ExtensionInput {
+  number: string;
+  userId: string | null;
+  secret: string; // required on create, empty = unchanged on update
+  enabled: boolean;
+}
+export interface BulkExtensionsInput {
+  extensions: { number: string; secret: string }[];
+  enabled: boolean;
+}
+export interface BulkExtensionsResult {
+  created: string[];
+  skipped: string[]; // numbers that already existed
+}

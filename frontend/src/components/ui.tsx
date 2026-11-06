@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -20,7 +20,7 @@ export function Button({ variant = "primary", className, ...p }: BtnProps) {
 }
 
 /* ── Field ──────────────────────────────────────────────── */
-type FieldProps = InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string };
+type FieldProps = ComponentProps<"input"> & { label: string; error?: string };
 export function Field({ label, error, id, className, ...p }: FieldProps) {
   const fid = id ?? `f-${label.toLowerCase().replace(/\W+/g, "-")}`;
   return (
