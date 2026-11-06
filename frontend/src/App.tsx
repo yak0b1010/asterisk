@@ -4,11 +4,14 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppLayout } from "./layouts/AppLayout";
 import { NAV } from "./nav";
+import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
 
 // Replace Placeholder with the real page in each step: { "/users": UsersPage, ... }
-const PAGES: Record<string, ComponentType> = {};
+const PAGES: Record<string, ComponentType> = {
+  "/": Dashboard,
+};
 
 export default function App() {
   return (
