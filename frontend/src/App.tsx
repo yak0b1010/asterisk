@@ -5,12 +5,16 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppLayout } from "./layouts/AppLayout";
 import { NAV } from "./nav";
 import Dashboard from "./pages/Dashboard";
+import Extensions from "./pages/Extensions";
 import Login from "./pages/Login";
 import Placeholder from "./pages/Placeholder";
+import Users from "./pages/Users";
 
 // Replace Placeholder with the real page in each step: { "/users": UsersPage, ... }
 const PAGES: Record<string, ComponentType> = {
   "/": Dashboard,
+  "/users": Users,
+  "/extensions": Extensions,
 };
 
 export default function App() {
