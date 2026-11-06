@@ -1,5 +1,6 @@
 import type { AuthUser, LoginResponse } from "../types";
 import { tokenStore } from "./client";
+import { mockMetrics, mockSummary } from "./mock-data";
 
 // Mock accounts: admin/admin, operator/operator, viewer/viewer
 const accounts: Record<string, { password: string; user: AuthUser }> = {
@@ -37,6 +38,10 @@ export async function mockRequest<T>(method: string, path: string, body?: unknow
     }
     case "POST /auth/logout":
       return undefined as T;
+    case "GET /dashboard/summary":
+      return mockSummary() as T;
+    case "GET /system/metrics":
+      return mockMetrics() as T;
     default:
       throw new MockHttpError(404, `Mock endpoint not implemented: ${route}`);
   }
