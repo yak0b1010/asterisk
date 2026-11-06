@@ -4,6 +4,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { AppLayout } from "./layouts/AppLayout";
 import { NAV } from "./nav";
+import Dialplan from "./pages/dialplan/Dialplan";
 import Dashboard from "./pages/Dashboard";
 import Extensions from "./pages/Extensions";
 import Login from "./pages/Login";
@@ -15,6 +16,7 @@ const PAGES: Record<string, ComponentType> = {
   "/": Dashboard,
   "/users": Users,
   "/extensions": Extensions,
+  "/dialplan": Dialplan,
 };
 
 export default function App() {

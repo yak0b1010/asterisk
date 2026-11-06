@@ -1,5 +1,6 @@
 import type { BulkExtensionsInput, DepartmentId, DirectoryUser, Extension, ExtensionInput, UserInput } from "../types";
 import { departmentOf } from "../utils/sip";
+import { mockDialplan } from "./mock-dialplan";
 import { MockHttpError } from "./mock-errors";
 
 const first = ["Amine", "Sara", "Yacine", "Lina", "Karim", "Nadia", "Omar", "Meriem", "Walid", "Imane", "Sofiane", "Hadjer"];
@@ -97,5 +98,5 @@ export function mockCrud<T>(method: string, path: string, body: unknown): T {
     if (method === "DELETE") { extensions.splice(i, 1); return undefined as T; }
   }
 
-  return bad(404, `Mock endpoint not implemented: ${method} ${p}`);
+  return mockDialplan<T>(method, path, body);
 }

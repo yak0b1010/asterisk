@@ -78,3 +78,44 @@ export interface BulkExtensionsResult {
   created: string[];
   skipped: string[]; // numbers that already existed
 }
+
+/* ── Dialplan ──────────────────────────────────────────── */
+export interface QueueRef { id: string; name: string } // GET /queues (extended in the call-center step)
+
+/** Numbering plan entry: a range of extensions and how calls to it are routed. */
+export interface DialRange {
+  id: string;
+  name: string;
+  from: number;
+  to: number;
+  routing: "person" | "queue"; // person = ring the phone; queue = send to a call-center queue
+  queue: string | null; // queue id when routing = "queue"
+  ringTimeoutSec: number;
+  voicemailFallback: boolean; // busy / no answer (or queue overflow) goes to voicemail
+}
+export type DialRangeInput = Omit<DialRange, "id">;
+
+/** Short service numbers outside the extension ranges (010, 020, ...). */
+export interface ServiceNumber {
+  id: string;
+  number: string;
+  label: string;
+  kind: "queue" | "voicemail-main" | "voicemail-deposit";
+  queue: string | null;
+}
+export type ServiceNumberInput = Omit<ServiceNumber, "id">;
+
+/** Department-to-department call restrictions: the listed pairs are blocked. */
+export interface Restrictions { blocked: { fromRangeId: string; toRangeId: string }[] }
+
+export type ForwardType = "unconditional" | "busy" | "no-answer";
+export interface ForwardRule { id: string; extension: string; type: ForwardType; destination: string; enabled: boolean }
+export type ForwardRuleInput = Omit<ForwardRule, "id">;
+
+export interface TransferSettings {
+  blindEnabled: boolean;
+  blindCode: string;
+  attendedEnabled: boolean;
+  attendedCode: string;
+  timeoutSec: number; // how long the transfer target rings before the call returns
+}
