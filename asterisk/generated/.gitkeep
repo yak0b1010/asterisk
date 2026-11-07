@@ -1,0 +1,2 @@
+# The backend writes generated Asterisk configuration into this directory.
+# The file is ignored by git; only this placeholder is committed.

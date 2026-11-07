@@ -5,8 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ApiError } from "../api/client";
 import { useBulkExtensions, useSaveExtension, useUsers } from "../api/directory";
-import { Select } from "../components/controls";
-import { Button, Field, Modal } from "../components/ui";
+import { Button, Dropdown, Field, Modal } from "../components/ui";
 import type { Extension } from "../types";
 import { departmentLabel, departmentOf, downloadCsv, generateSecret } from "../utils/sip";
 
@@ -28,8 +27,9 @@ export function ExtensionModal({ extension, onClose }: { extension: Extension | 
   const isEdit = !!extension;
   const users = useUsers();
   const save = useSaveExtension(isEdit);
-  const { register, handleSubmit, setValue, getValues, setError, formState: { errors, isSubmitting } } = useForm<SingleValues>({
+  const { register, handleSubmit, setValue, getValues, watch, setError, formState: { errors, isSubmitting } } = useForm<SingleValues>({
     resolver: zodResolver(singleSchema(isEdit)),
+    mode: "onSubmit",
     defaultValues: { number: extension?.number ?? "", userId: extension?.userId ?? "", secret: isEdit ? "" : generateSecret(), enabled: extension?.enabled ?? true },
   });
 
@@ -44,25 +44,36 @@ export function ExtensionModal({ extension, onClose }: { extension: Extension | 
 
   return (
     <Modal open title={isEdit ? `Edit extension ${extension.number}` : "New extension"} onClose={onClose}>
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field label="Extension number" inputMode="numeric" maxLength={3} readOnly={isEdit} {...register("number")} error={errors.number?.message} autoFocus={!isEdit}
-          className={isEdit ? "opacity-70" : undefined} />
-        <Select label="Assigned user" {...register("userId")}>
-          <option value="">Unassigned</option>
-          {users.data?.slice().sort((a, b) => a.fullName.localeCompare(b.fullName)).map((u) => (
-            <option key={u.id} value={u.id}>{u.fullName} ({departmentLabel(u.department)})</option>
-          ))}
-        </Select>
-        <div className="flex items-end gap-2">
+      <form onSubmit={onSubmit} className="space-y-6" noValidate>
+        <Field label="Extension number" inputMode="numeric" maxLength={3} readOnly={isEdit} {...register("number")} error={errors.number?.message}
+          className={isEdit ? "bg-[#ffe6d9]" : undefined} />
+        <Dropdown
+          triggerLabel={watch("userId") || "Assigned user"}
+          value={watch("userId") || ""}
+          onChange={(val) => setValue("userId", val)}
+          items={[
+            { label: "Unassigned", value: "" },
+            ...(users.data?.slice().sort((a, b) => a.fullName.localeCompare(b.fullName)) || []).map((u) => ({
+              label: `${u.fullName} (${departmentLabel(u.department)})`,
+              value: u.id,
+            })),
+          ]}
+          size="sm"
+        />
+        <div className="flex items-end gap-4">
           <Field className="flex-1" label="SIP password" autoComplete="off" spellCheck={false} placeholder={isEdit ? "Leave empty to keep the current password" : undefined}
             {...register("secret")} error={errors.secret?.message} />
-          <Button type="button" variant="secondary" aria-label="Generate password" title="Generate" onClick={() => setValue("secret", generateSecret(), { shouldValidate: true })}><RefreshCw size={15} /></Button>
-          <Button type="button" variant="secondary" aria-label="Copy password" title="Copy" onClick={() => navigator.clipboard?.writeText(getValues("secret"))}><Copy size={15} /></Button>
+          <Button type="button" variant="secondary" size="sm" aria-label="Generate password" title="Generate" onClick={() => setValue("secret", generateSecret(), { shouldValidate: true })}><RefreshCw size={16} /></Button>
+          <Button type="button" variant="secondary" size="sm" aria-label="Copy password" title="Copy" onClick={() => navigator.clipboard?.writeText(getValues("secret"))}><Copy size={16} /></Button>
         </div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("enabled")} /> Enabled</label>
-        {errors.root && <p role="alert" className="rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{errors.root.message}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        <label className="flex items-center gap-3 text-sm font-bold text-ink cursor-pointer"><input type="checkbox" {...register("enabled")} /> Enabled</label>
+        {errors.root && (
+          <div className="nb-card p-3 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+            <p className="text-xs font-bold text-red-800">{errors.root.message}</p>
+          </div>
+        )}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving…" : "Save"}</Button>
         </div>
       </form>
@@ -83,6 +94,7 @@ export function BulkModal({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<{ created: string[]; skipped: string[]; secrets: Map<string, string> } | null>(null);
   const { register, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = useForm<BulkValues>({
     resolver: zodResolver(bulkSchema),
+    mode: "onSubmit",
     defaultValues: { from: "", to: "", enabled: true },
   });
   const [from, to] = watch(["from", "to"]);
@@ -102,13 +114,15 @@ export function BulkModal({ onClose }: { onClose: () => void }) {
   if (result) {
     return (
       <Modal open title="Extensions created" onClose={onClose}>
-        <p className="text-sm">Created <strong>{result.created.length}</strong>{result.skipped.length > 0 && <>, skipped {result.skipped.length} that already existed ({result.skipped.slice(0, 6).join(", ")}{result.skipped.length > 6 ? "…" : ""})</>}.</p>
-        <p className="mt-3 rounded-md bg-signal/10 px-3 py-2 text-sm text-signal-dark">Passwords are shown only now. Download them before closing.</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" disabled={result.created.length === 0} onClick={() => downloadCsv("extensions.csv", [["extension", "department", "password"], ...result.created.map((n) => [n, departmentLabel(departmentOf(n)!), result.secrets.get(n)!])])}>
-            <Download size={16} /> Download CSV
-          </Button>
-          <Button onClick={onClose}>Done</Button>
+        <div className="space-y-5">
+          <p className="text-sm font-bold text-ink">Created <strong className="text-brand">{result.created.length}</strong>{result.skipped.length > 0 && <>, skipped {result.skipped.length} that already existed ({result.skipped.slice(0, 6).join(", ")}{result.skipped.length > 6 ? "…" : ""})</>}.</p>
+          <p className="text-xs font-bold text-ink-2">Passwords are shown only now. Download them before closing.</p>
+          <div className="flex justify-end gap-4">
+            <Button variant="secondary" size="sm" disabled={result.created.length === 0} onClick={() => downloadCsv("extensions.csv", [["extension", "department", "password"], ...result.created.map((n) => [n, departmentLabel(departmentOf(n)!), result.secrets.get(n)!])])}>
+              <Download size={16} /> Download CSV
+            </Button>
+            <Button size="sm" onClick={onClose}>Done</Button>
+          </div>
         </div>
       </Modal>
     );
@@ -116,16 +130,20 @@ export function BulkModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal open title="Create a range of extensions" onClose={onClose}>
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="From" inputMode="numeric" maxLength={3} placeholder="100" {...register("from")} error={errors.from?.message} autoFocus />
+      <form onSubmit={onSubmit} className="space-y-6" noValidate>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="From" inputMode="numeric" maxLength={3} placeholder="100" {...register("from")} error={errors.from?.message} />
           <Field label="To" inputMode="numeric" maxLength={3} placeholder="119" {...register("to")} error={errors.to?.message} />
         </div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("enabled")} /> Enabled</label>
-        <p className="text-sm text-ink/60">{count ? `Creates ${count} extension${count > 1 ? "s" : ""}, each with a random password. Existing numbers are skipped.` : "Passwords are generated for you."}</p>
-        {errors.root && <p role="alert" className="rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{errors.root.message}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        <label className="flex items-center gap-3 text-sm font-bold text-ink cursor-pointer"><input type="checkbox" {...register("enabled")} /> Enabled</label>
+        <p className="text-xs font-bold text-ink-2">{count ? `Creates ${count} extension${count > 1 ? "s" : ""}, each with a random password. Existing numbers are skipped.` : "Passwords are generated for you."}</p>
+        {errors.root && (
+          <div className="nb-card p-3 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+            <p className="text-xs font-bold text-red-800">{errors.root.message}</p>
+          </div>
+        )}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Creating…" : "Create"}</Button>
         </div>
       </form>

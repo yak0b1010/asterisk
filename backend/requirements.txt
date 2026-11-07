@@ -1,0 +1,17 @@
+# Web framework
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.34,<1.0
+
+# Database
+SQLAlchemy>=2.0.36,<3.0
+psycopg[binary]>=3.2.3,<4.0
+
+# Settings and validation
+pydantic-settings>=2.7,<3.0
+
+# Authentication
+PyJWT>=2.10,<3.0
+bcrypt>=4.2,<6.0
+
+# System metrics
+psutil>=6.1,<8.0

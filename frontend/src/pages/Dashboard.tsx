@@ -1,30 +1,40 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePolling } from "../api/usePolling";
 import { Meter, Sparkline } from "../components/charts";
-import { Badge, DataTable, PageHeader, StatCard, type Column } from "../components/ui";
+import { Badge, DataTable, PageHeader, StatCard, Dropdown, type Column } from "../components/ui";
 import { formatDuration, formatTime } from "../utils/format";
 import type { CallStatus, DashboardSummary, RecentCall, SystemMetrics } from "../types";
 
 const HISTORY = 30;
-const statusTone: Record<CallStatus, "ok" | "warn" | "bad"> = { answered: "ok", missed: "warn", busy: "warn", failed: "bad" };
+const statusTone: Record<CallStatus, "ok" | "bad" | "warn"> = { answered: "ok", missed: "warn", busy: "warn", failed: "bad" };
 
 const callColumns: Column<RecentCall>[] = [
-  { header: "Time", cell: (c) => formatTime(c.startedAt), className: "tabular-nums" },
+  { header: "Time", cell: (c) => formatTime(c.startedAt), className: "tabular-nums w-28" },
   { header: "From", cell: (c) => c.caller },
   { header: "To", cell: (c) => c.callee },
-  { header: "Duration", cell: (c) => (c.durationSec ? formatDuration(c.durationSec) : "—"), className: "tabular-nums" },
+  { header: "Duration", cell: (c) => (c.durationSec ? formatDuration(c.durationSec) : "—"), className: "tabular-nums w-20" },
   { header: "Result", cell: (c) => <Badge tone={statusTone[c.status]}>{c.status}</Badge> },
 ];
 
-function Panel({ title, value, detail, children }: { title: string; value: string; detail: string; children: ReactNode }) {
+function Panel({
+  title,
+  value,
+  detail,
+  children,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-line bg-white p-4">
-      <div className="flex items-baseline justify-between">
-        <p className="text-sm text-ink/60">{title}</p>
-        <p className="text-xl font-semibold tabular-nums">{value}</p>
+    <div className="nb-card p-5 h-full">
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="nb-panel-title">{title}</p>
+        <p className="text-4xl font-black tabular-nums">{value}</p>
       </div>
-      <div className="my-3">{children}</div>
-      <p className="text-xs text-ink/50">{detail}</p>
+      <p className="text-xs font-bold text-ink-2 mb-5">{detail}</p>
+      {children && <div>{children}</div>}
     </div>
   );
 }
@@ -41,26 +51,37 @@ export default function Dashboard() {
   const s = summary.data;
   const m = metrics.data;
   const error = summary.error ?? metrics.error;
-  const asteriskTone = s?.asterisk.status === "running" ? "ok" : s?.asterisk.status === "degraded" ? "warn" : "bad";
 
   return (
     <>
       <PageHeader
         title="Dashboard"
         description={summary.updatedAt ? `Updated ${formatTime(summary.updatedAt)}` : "Loading…"}
+        actions={
+          <Dropdown
+            triggerLabel="Actions"
+            items={[
+              { label: "Refresh data", value: "refresh", onClick: () => window.location.reload() },
+              { label: "Export CDR", value: "export", onClick: () => alert("Exporting CDR data…") },
+              { label: "View settings", value: "settings", onClick: () => alert("Opening settings…") },
+              { label: "Sign out", value: "logout", onClick: () => alert("Signing out…"), danger: true },
+            ]}
+          />
+        }
       />
 
       {error && (
-        <p role="alert" className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">
-          Can’t reach the server ({error}). Retrying automatically.
-        </p>
+        <div className="mb-8 nb-card p-4 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+          <p className="text-xs font-bold text-red-800">⚠ Can’t reach the server ({error}). Retrying automatically.</p>
+        </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Asterisk"
-          value={s ? <Badge tone={asteriskTone}>{s.asterisk.status}</Badge> : "—"}
-          hint={s ? `v${s.asterisk.version} · up ${formatDuration(s.asterisk.uptimeSec)}` : undefined}
+          label="Asterisk status"
+          value={s ? <Badge tone={s?.asterisk.status === "running" ? "status-running" : s?.asterisk.status === "degraded" ? "status-degraded" : "status-stopped"}>{s.asterisk.status}</Badge> : "—"}
+          hint={s ? `v${s.asterisk.version} · uptime ${formatDuration(s.asterisk.uptimeSec)}` : undefined}
+          cardClass={s?.asterisk.status === "running" ? "border-brand shadow-[4px_4px_0_#d63200]" : ""}
         />
         <StatCard
           label="Registered extensions"
@@ -75,29 +96,32 @@ export default function Dashboard() {
         />
       </div>
 
-      <h2 className="mb-3 mt-8 text-base font-semibold">Server load</h2>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel title="CPU" value={m ? `${m.cpuPercent.toFixed(0)}%` : "—"} detail="Last 90 seconds">
+      <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        <Panel title="CPU usage" value={m ? `${m.cpuPercent.toFixed(0)}%` : "—"} detail="Last 90 seconds">
           <Sparkline values={history.map((h) => h.cpuPercent)} max={HISTORY} />
         </Panel>
-        <Panel
-          title="Memory"
-          value={m ? `${m.memoryPercent.toFixed(0)}%` : "—"}
-          detail={m ? `${m.memoryUsedMb} of ${m.memoryTotalMb} MB used` : "Last 90 seconds"}
-        >
+        <Panel title="Memory usage" value={m ? `${m.memoryPercent.toFixed(0)}%` : "—"} detail={m ? `${m.memoryUsedMb} of ${m.memoryTotalMb} MB used` : "Last 90 seconds"}>
           <Sparkline values={history.map((h) => h.memoryPercent)} max={HISTORY} />
         </Panel>
-        <Panel
-          title="Disk"
-          value={m ? `${m.diskPercent.toFixed(0)}%` : "—"}
-          detail={m ? `${m.diskUsedGb.toFixed(1)} of ${m.diskTotalGb} GB used` : "—"}
-        >
+        <Panel title="Disk usage" value={m ? `${m.diskPercent.toFixed(0)}%` : "—"} detail={m ? `${m.diskUsedGb.toFixed(1)} of ${m.diskTotalGb} GB used` : "—"}>
           <Meter percent={m?.diskPercent ?? 0} label="Disk usage" />
         </Panel>
       </div>
 
-      <h2 className="mb-3 mt-8 text-base font-semibold">Recent calls</h2>
-      <DataTable columns={callColumns} rows={s?.recentCalls ?? []} rowKey={(c) => c.id} empty={s ? "No calls yet today." : "Loading…"} />
+      <div className="mt-10">
+        <div className="nb-card shadow-none">
+          <div className="p-5 border-b-4 border-black flex items-center justify-between">
+            <h3 className="text-lg font-black">Recent calls</h3>
+            <p className="text-xs font-bold text-ink-2">Last 8 completed calls</p>
+          </div>
+          <DataTable
+            columns={callColumns}
+            rows={s?.recentCalls ?? []}
+            rowKey={(c) => c.id}
+            empty={s ? "No calls yet today." : "Loading…"}
+          />
+        </div>
+      </div>
     </>
   );
 }

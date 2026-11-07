@@ -947,3 +947,8 @@ $RECYCLE.BIN/
 
 !asterisk/conf/scripts
 !asterisk/conf/scripts/**
+
+# Generated at runtime by the backend (see backend/app/pbx.py)
+asterisk/generated/*.conf
+asterisk/generated/.*.tmp
+!asterisk/generated/.gitkeep

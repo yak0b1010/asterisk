@@ -44,7 +44,7 @@ if [ -n "${AMI_PASSWORD:-}" ]; then
 enabled = yes
 webenabled = no
 port = 5038
-bindaddr = 127.0.0.1
+bindaddr = ${AMI_BINDADDR:-127.0.0.1}
 
 [backend]
 secret = ${AMI_PASSWORD}
@@ -75,19 +75,18 @@ else
   log "ARI_PASSWORD unset - ARI stays disabled"
 fi
 
-# ---- PostgreSQL realtime over ODBC (realtime mode only) ------------------
-if [ "${MODE}" = "realtime" ]; then
-  if [ -n "${DB_PASSWORD:-}" ]; then
-    cat >/etc/odbc.ini <<EOF
+# ---- PostgreSQL over ODBC (realtime objects + CDR in both modes) ---------
+if [ -n "${DB_PASSWORD:-}" ]; then
+  cat >/etc/odbc.ini <<EOF
 [asterisk-pgsql]
-Description = Asterisk realtime datasource
+Description = Asterisk datasource
 Driver      = PostgreSQL Unicode
 Servername  = ${DB_HOST:-postgres}
 Port        = ${DB_PORT:-5432}
 Database    = ${DB_NAME:-asterisk}
 EOF
 
-    cat >/etc/asterisk/res_odbc.conf <<EOF
+  cat >/etc/asterisk/res_odbc.conf <<EOF
 [asterisk]
 enabled         => yes
 dsn             => asterisk-pgsql
@@ -97,12 +96,29 @@ pre-connect     => yes
 max_connections => 5
 sanitysql       => select 1
 EOF
-    log "rendered odbc.ini + res_odbc.conf (host=${DB_HOST:-postgres} db=${DB_NAME:-asterisk})"
+  log "rendered odbc.ini + res_odbc.conf (host=${DB_HOST:-postgres} db=${DB_NAME:-asterisk})"
+
+  # Call detail records feed the dashboard in every mode.
+  # `dsn` here is the res_odbc.conf *section name* ([asterisk]); the actual
+  # ODBC driver DSN (`asterisk-pgsql`) is set inside that section above.
+  cat >/etc/asterisk/cdr_odbc.conf <<EOF
+[global]
+dsn               = asterisk
+loguniqueid       = yes
+dispositionstring = yes
+table             = cdr
+usegmtime         = yes
+newcdrcolumns     = yes
+EOF
+  log "rendered cdr_odbc.conf"
+
+  if [ "${MODE}" = "realtime" ]; then
+    log "realtime mode - PJSIP/voicemail objects are read from PostgreSQL"
   else
-    log "realtime mode but DB_PASSWORD unset - ODBC will not connect"
+    log "standalone mode - static endpoints, CDR written to PostgreSQL"
   fi
 else
-  log "standalone mode - skipping ODBC realtime configuration"
+  log "DB_PASSWORD unset - ODBC and CDR storage disabled"
 fi
 
 # ---- Self-signed TLS material for WSS / ARI over HTTPS -------------------

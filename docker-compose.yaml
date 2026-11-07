@@ -1,58 +1,129 @@
 name: asterisk-appliance
 
+# Complete stack:
+#   postgres  - users, extensions, audit log and CDR
+#   backend   - FastAPI; also generates the Asterisk config files
+#   asterisk  - PBX in standalone mode, reading the generated files
+#   frontend  - nginx serving the React app and proxying /api
+#
+# Start with: cp .env.example .env && docker compose up -d --build
+
 services:
-  # TODO: Needs check from Backend role
-  #
-  # postgres:
-  #   image: postgres:${POSTGRES_VERSION}
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_DB: ${DB_NAME}
-  #     POSTGRES_USER: ${DB_USER}
-  #     POSTGRES_PASSWORD: ${DB_PASSWORD}
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #     - ./db/init:/docker-entrypoint-initdb.d:ro
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-18}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-asterisk}
+      POSTGRES_USER: ${DB_USER:-asterisk}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-asterisk}
+    volumes:
+      # Postgres 18 keeps its data below /var/lib/postgresql; mounting the
+      # parent also works for older versions.
+      - pgdata:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    image: ${ASTERISK_APP_IMAGE:-asterisk-appliance}-backend:latest
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-asterisk}
+      DB_USER: ${DB_USER:-asterisk}
+      DB_PASSWORD: ${DB_PASSWORD:-asterisk}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-480}
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-admin}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+      AMI_HOST: asterisk
+      AMI_PORT: ${AMI_PORT:-5038}
+      AMI_USERNAME: backend
+      AMI_PASSWORD: ${AMI_PASSWORD:-change-me-ami-password}
+      AMI_TIMEOUT: "2"
+      PBX_CONFIG_DIR: /generated
+      PBX_FQDN: ${PBX_FQDN:-asterisk.local}
+      PBX_PUBLIC_IP: ${PBX_PUBLIC_IP:-}
+      PBX_RELOAD_ENABLED: "true"
+      CORS_ORIGINS: http://localhost:${DASHBOARD_PORT:-8080},http://localhost:5173
+    volumes:
+      # The backend is the only writer.  Asterisk mounts the same folder
+      # read-only, so static PBX config stays in sync with the database.
+      - ./asterisk/generated:/generated
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   asterisk:
-    image: ${ASTERISK_APP_IMAGE}:${ASTERISK_MODE}
+    image: ${ASTERISK_APP_IMAGE:-asterisk-appliance}:${ASTERISK_MODE:-standalone}
     build:
       context: ./asterisk
       args:
-        BASE_IMAGE: ${ASTERISK_IMAGE}:${ASTERISK_TAG}@${ASTERISK_DIGEST}
-        MODE: ${ASTERISK_MODE}
+        BASE_IMAGE: ${ASTERISK_IMAGE:-andrius/asterisk}:${ASTERISK_TAG:-22.8-cert4_debian-trixie-8d9e955}@${ASTERISK_DIGEST:-sha256:f3bd01300f0c36c8a7ea5bd9472c4b906d0f85410c3ea429166a0fedac6ad3ee}
+        MODE: ${ASTERISK_MODE:-standalone}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "${SIP_PORT}:5060/udp"
-      - "${SIP_PORT}:5060/tcp"
-      - "${RTP_RANGE}:${RTP_RANGE}/udp"
-      - "${HTTP_PORT}:8088"
-      - "${WSS_PORT}:8089"
+      # Wait for the backend to create the users/extensions and write the
+      # generated PJSIP/queue/voicemail files before Asterisk starts.
+      backend:
+        condition: service_healthy
     environment:
-      ASTERISK_MODE: ${ASTERISK_MODE}
-      RTP_RANGE: ${RTP_RANGE}
-      AMI_PASSWORD: ${AMI_PASSWORD}
-      ARI_PASSWORD: ${ARI_PASSWORD}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      ASTERISK_MODE: ${ASTERISK_MODE:-standalone}
+      # Ports inside the container stay fixed; only the published host ports
+      # come from .env.  This keeps firewall rules and the PBX in lock-step.
+      SIP_PORT: "5060"
+      HTTP_PORT: "8088"
+      WSS_PORT: "8089"
+      RTP_RANGE: ${RTP_RANGE:-10000-10199}
+      AMI_PASSWORD: ${AMI_PASSWORD:-change-me-ami-password}
+      AMI_BINDADDR: 0.0.0.0
+      ARI_PASSWORD: ${ARI_PASSWORD:-}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-asterisk}
+      DB_USER: ${DB_USER:-asterisk}
+      DB_PASSWORD: ${DB_PASSWORD:-asterisk}
+      PBX_FQDN: ${PBX_FQDN:-asterisk.local}
     volumes:
-      - asterisk-lib:/var/lib/asterisk
-      - asterisk-spool:/var/spool/asterisk
-      - asterisk-log:/var/log/asterisk
+      - ./asterisk/generated:/etc/asterisk/generated:ro
+      - asterisk_keys:/var/lib/asterisk/keys
+    ports:
+      - "${SIP_PORT:-5060}:5060/udp"
+      - "${SIP_PORT:-5060}:5060/tcp"
+      - "${RTP_RANGE:-10000-10199}:${RTP_RANGE:-10000-10199}/udp"
+      - "${HTTP_PORT:-8088}:8088"
+      - "${WSS_PORT:-8089}:8089"
+    healthcheck:
+      test: ["CMD-SHELL", "asterisk -rx 'core show uptime' >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+    image: ${ASTERISK_APP_IMAGE:-asterisk-appliance}-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT:-8080}:80"
 
 volumes:
-  # pgdata:
-  asterisk-lib:
-  asterisk-spool:
-  asterisk-log:
+  pgdata:
+  asterisk_keys:

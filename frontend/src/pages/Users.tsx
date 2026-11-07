@@ -6,8 +6,8 @@ import { z } from "zod";
 import { ApiError } from "../api/client";
 import { useDeleteUser, useExtensions, useSaveUser, useUsers } from "../api/directory";
 import { useAuth } from "../auth/AuthContext";
-import { ConfirmDialog, Pagination, Select } from "../components/controls";
-import { Badge, Button, DataTable, Field, Modal, PageHeader, type Column } from "../components/ui";
+import { ConfirmDialog, Pagination } from "../components/controls";
+import { Badge, Button, DataTable, Dropdown, Field, Modal, PageHeader, type Column } from "../components/ui";
 import type { DepartmentId, DirectoryUser } from "../types";
 import { DEPARTMENTS, departmentLabel } from "../utils/sip";
 
@@ -15,17 +15,20 @@ const PAGE_SIZE = 25;
 
 const schema = z.object({
   fullName: z.string().trim().min(2, "Enter the full name"),
-  email: z.email("Enter a valid email address"),
+  email: z.string().email("Enter a valid email address"),
   department: z.enum(DEPARTMENTS.map((d) => d.id) as [DepartmentId, ...DepartmentId[]]),
 });
 type FormValues = z.infer<typeof schema>;
 
 function UserModal({ user, onClose }: { user: DirectoryUser | null; onClose: () => void }) {
   const save = useSaveUser();
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, setError, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    mode: "onSubmit",
     defaultValues: { fullName: user?.fullName ?? "", email: user?.email ?? "", department: user?.department ?? "administration" },
   });
+
+  const departmentValue = watch("department");
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -38,15 +41,28 @@ function UserModal({ user, onClose }: { user: DirectoryUser | null; onClose: () 
 
   return (
     <Modal open title={user ? "Edit user" : "New user"} onClose={onClose}>
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <Field label="Full name" {...register("fullName")} error={errors.fullName?.message} autoFocus />
+      <form onSubmit={onSubmit} className="space-y-6" noValidate>
+        <Field label="Full name" {...register("fullName")} error={errors.fullName?.message} />
         <Field label="Email" type="email" {...register("email")} error={errors.email?.message} />
-        <Select label="Department" {...register("department")}>
-          {DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </Select>
-        {errors.root && <p role="alert" className="rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{errors.root.message}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        <Dropdown
+          triggerLabel={departmentValue || "Department"}
+          value={watch("department") || ""}
+          onChange={(val) => setValue("department", val as DepartmentId)}
+          items={[
+            ...(DEPARTMENTS.slice().sort((a, b) => a.label.localeCompare(b.label)) || []).map((d) => ({
+              label: d.label,
+              value: d.id,
+            })),
+          ]}
+          size="sm"
+        />
+        {errors.root && (
+          <div className="nb-card p-3 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+            <p className="text-xs font-bold text-red-800">{errors.root.message}</p>
+          </div>
+        )}
+        <div className="flex justify-end gap-4">
+          <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving…" : "Save"}</Button>
         </div>
       </form>
@@ -82,23 +98,27 @@ export default function Users() {
   const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const columns: Column<DirectoryUser>[] = [
-    { header: "Name", cell: (u) => (<><p className="font-medium">{u.fullName}</p><p className="text-xs text-ink/50">{u.email}</p></>) },
-    { header: "Department", cell: (u) => <Badge>{departmentLabel(u.department)}</Badge> },
+    { header: "Name", cell: (u) => (<><p className="font-black text-sm">{u.fullName}</p><p className="text-xs font-bold text-ink-2">{u.email}</p></>) },
+    { header: "Department", cell: (u) => (
+      <Badge tone={u.department === "administration" ? "dept-admin" : u.department === "finance" ? "dept-finance" : u.department === "it" ? "dept-it" : u.department === "support" ? "dept-support" : "dept-management"}>
+        {departmentLabel(u.department)}
+      </Badge>
+    ) },
     {
       header: "Extensions",
       cell: (u) => {
         const list = extByUser.get(u.id) ?? [];
-        return list.length ? <span className="tabular-nums">{list.slice(0, 3).join(", ")}{list.length > 3 && ` +${list.length - 3}`}</span> : <span className="text-ink/40">None</span>;
+        return list.length ? <span className="tabular-nums text-sm font-black">{list.slice(0, 3).join(", ")}{list.length > 3 && ` +${list.length - 3}`}</span> : <span className="text-xs font-bold text-ink-2">None</span>;
       },
     },
-    { header: "Created", cell: (u) => new Date(u.createdAt).toLocaleDateString("en-GB"), className: "tabular-nums" },
+    { header: "Created", cell: (u) => new Date(u.createdAt).toLocaleDateString("en-GB"), className: "tabular-nums text-sm font-black" },
     {
       header: "",
       className: "w-24 text-right",
       cell: (u) => (
-        <div className="flex justify-end gap-1">
-          <button className="rounded p-1.5 hover:bg-paper" aria-label={`Edit ${u.fullName}`} onClick={() => setEditing(u)}><Pencil size={15} /></button>
-          {isAdmin && <button className="rounded p-1.5 text-bad hover:bg-bad/10" aria-label={`Delete ${u.fullName}`} onClick={() => setDeleting(u)}><Trash2 size={15} /></button>}
+        <div className="flex justify-end gap-4">
+          <button className="nb-btn secondary size sm p-1.5 border-4 border-black shadow-[4px_4px_0_#000] hover:bg-[#ffe6d9]" aria-label={`Edit ${u.fullName}`} onClick={() => setEditing(u)}><Pencil size={14} /></button>
+          {isAdmin && <button className="nb-btn danger p-1.5" aria-label={`Delete ${u.fullName}`} onClick={() => setDeleting(u)}><Trash2 size={14} /></button>}
         </div>
       ),
     },
@@ -108,23 +128,36 @@ export default function Users() {
     <>
       <PageHeader
         title="Users"
-        description={users.data ? `${users.data.length} users` : "Loading…"}
-        actions={<Button onClick={() => setEditing("new")}><Plus size={16} /> New user</Button>}
+        description={users.data ? `${users.data.length} directory users` : "Loading…"}
+        actions={<Button size="sm" onClick={() => setEditing("new")}><Plus size={16} /> New user</Button>}
       />
 
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-8 flex flex-wrap gap-4">
         <input
           aria-label="Search users" placeholder="Search name or email" value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="w-64 rounded-md border border-line bg-white px-3 py-2 text-sm"
+          className="w-72 nb-input"
         />
-        <select aria-label="Filter by department" value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} className="rounded-md border border-line bg-white px-3 py-2 text-sm">
-          <option value="">All departments</option>
-          {DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
+        <Dropdown
+          triggerLabel={department || "Department"}
+          value={department || ""}
+          onChange={(val) => setDepartment(val)}
+          items={[
+            { label: "All departments", value: "" },
+            ...DEPARTMENTS.map((d) => ({
+              label: d.label,
+              value: d.id,
+            })),
+          ]}
+          size="sm"
+        />
       </div>
 
-      {users.error && <p role="alert" className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">Could not load users: {users.error.message}</p>}
+      {users.error && (
+        <div className="mb-8 nb-card p-4 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+          <p className="text-xs font-bold text-red-800">⚠ Could not load users: {users.error.message}</p>
+        </div>
+      )}
       <DataTable columns={columns} rows={rows} rowKey={(u) => u.id} empty={users.isLoading ? "Loading…" : "No users match."} />
       <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPage={setPage} />
 

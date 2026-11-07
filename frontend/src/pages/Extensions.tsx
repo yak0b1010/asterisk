@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useDeleteExtension, useExtensions, useToggleExtension, useUsers } from "../api/directory";
 import { useAuth } from "../auth/AuthContext";
 import { ConfirmDialog, Pagination, Switch } from "../components/controls";
-import { Badge, Button, DataTable, PageHeader, type Column } from "../components/ui";
+import { Badge, Button, DataTable, Dropdown, PageHeader, type Column } from "../components/ui";
 import type { Extension } from "../types";
 import { DEPARTMENTS, departmentLabel, departmentOf } from "../utils/sip";
 import { BulkModal, ExtensionModal } from "./ExtensionForms";
@@ -42,17 +42,17 @@ export default function Extensions() {
   const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const columns: Column<Extension>[] = [
-    { header: "Extension", cell: (e) => <span className="font-semibold tabular-nums">{e.number}</span> },
-    { header: "User", cell: (e) => (e.userId ? names.get(e.userId) ?? "…" : <span className="text-ink/40">Unassigned</span>) },
+    { header: "Extension", cell: (e) => <span className="font-black text-sm tabular-nums">{e.number}</span> },
+    { header: "User", cell: (e) => (e.userId ? names.get(e.userId) ?? "…" : <span className="text-xs font-bold text-ink-2">Unassigned</span>) },
     { header: "Department", cell: (e) => departmentLabel(departmentOf(e.number)!) },
     {
       header: "Status",
       cell: (e) => {
         const s = statusOf(e);
         return (
-          <div className="flex items-center gap-2">
-            <Badge tone={s === "registered" ? "ok" : s === "disabled" ? "warn" : "neutral"}>{s}</Badge>
-            {e.contactIp && <span className="text-xs tabular-nums text-ink/50">{e.contactIp}</span>}
+          <div className="flex items-center gap-3">
+            <Badge tone={s === "registered" ? "status-running" : s === "disabled" ? "status-stopped" : "status-degraded"}>{s}</Badge>
+            {e.contactIp && <span className="text-xs font-bold tabular-nums text-ink-2">{e.contactIp}</span>}
           </div>
         );
       },
@@ -62,16 +62,15 @@ export default function Extensions() {
       header: "",
       className: "w-24 text-right",
       cell: (e) => (
-        <div className="flex justify-end gap-1">
-          <button className="rounded p-1.5 hover:bg-paper" aria-label={`Edit extension ${e.number}`} onClick={() => setModal(e)}><Pencil size={15} /></button>
-          {isAdmin && <button className="rounded p-1.5 text-bad hover:bg-bad/10" aria-label={`Delete extension ${e.number}`} onClick={() => setDeleting(e)}><Trash2 size={15} /></button>}
+        <div className="flex justify-end gap-4">
+          <button className="nb-btn secondary size sm p-1.5 border-4 border-black shadow-[4px_4px_0_#000] hover:bg-[#ffe6d9]" aria-label={`Edit extension ${e.number}`} onClick={() => setModal(e)}><Pencil size={14} /></button>
+          {isAdmin && <button className="nb-btn danger p-1.5" aria-label={`Delete extension ${e.number}`} onClick={() => setDeleting(e)}><Trash2 size={14} /></button>}
         </div>
       ),
     },
   ];
 
   const reset = (fn: () => void) => { fn(); setPage(1); };
-  const selectCls = "rounded-md border border-line bg-white px-3 py-2 text-sm";
 
   return (
     <>
@@ -79,29 +78,46 @@ export default function Extensions() {
         title="Extensions"
         description={extensions.data ? `${all.length} extensions · ${all.filter((e) => e.registered).length} registered now` : "Loading…"}
         actions={
-          <div className="flex gap-2">
-            {isAdmin && <Button variant="secondary" onClick={() => setModal("bulk")}><Rows3 size={16} /> Create range</Button>}
-            <Button onClick={() => setModal("new")}><Plus size={16} /> New extension</Button>
+          <div className="flex gap-4">
+            {isAdmin && <Button variant="secondary" size="sm" onClick={() => setModal("bulk")}><Rows3 size={16} /> Create range</Button>}
+            <Button size="sm" onClick={() => setModal("new")}><Plus size={16} /> New extension</Button>
           </div>
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-3">
-        <input aria-label="Search extensions" placeholder="Search number or user" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} className="w-64 rounded-md border border-line bg-white px-3 py-2 text-sm" />
-        <select aria-label="Filter by department" value={department} onChange={(e) => reset(() => setDepartment(e.target.value))} className={selectCls}>
-          <option value="">All departments</option>
-          {DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-        <select aria-label="Filter by status" value={status} onChange={(e) => reset(() => setStatus(e.target.value))} className={selectCls}>
-          <option value="">Any status</option>
-          <option value="registered">Registered</option>
-          <option value="offline">Offline</option>
-          <option value="disabled">Disabled</option>
-        </select>
+      <div className="mb-8 flex flex-wrap gap-4">
+        <input aria-label="Search extensions" placeholder="Search number or user" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} className="w-72 nb-input" />
+        <Dropdown
+          triggerLabel={department || "Department"}
+          value={department || ""}
+          onChange={(val) => setDepartment(val)}
+          items={[
+            { label: "All departments", value: "" },
+            ...DEPARTMENTS.map((d) => ({
+              label: d.label,
+              value: d.id,
+            })),
+          ]}
+          size="sm"
+        />
+        <Dropdown
+          triggerLabel={status || "Status"}
+          value={status || ""}
+          onChange={(val) => setStatus(val)}
+          items={[
+            { label: "Any status", value: "" },
+            { label: "Registered", value: "registered" },
+            { label: "Offline", value: "offline" },
+            { label: "Disabled", value: "disabled" },
+          ]}
+          size="sm"
+        />
       </div>
 
       {(extensions.error || toggle.error) && (
-        <p role="alert" className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{(extensions.error ?? toggle.error)!.message}</p>
+        <div className="mb-8 nb-card p-4 bg-[#fee2e2] border-4 border-red-600 shadow-[4px_4px_0_#b91c1c]">
+          <p className="text-xs font-bold text-red-800">⚠ {(extensions.error ?? toggle.error)!.message}</p>
+        </div>
       )}
       <DataTable columns={columns} rows={rows} rowKey={(e) => e.number} empty={extensions.isLoading ? "Loading…" : "No extensions match."} />
       <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPage={setPage} />
