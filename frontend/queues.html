@@ -215,12 +215,12 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const payload = {
-        name: form.q_name.value,
-        number: form.q_number.value,
-        strategy: form.q_strategy.value,
-        wrapup_time: parseInt(form.q_wrapup.value) || 0,
-        max_len: parseInt(form.q_maxlen.value) || 0,
-        timeout: parseInt(form.q_timeout.value) || 60,
+        name: document.getElementById("q-name").value,
+        number: document.getElementById("q-number").value,
+        strategy: document.getElementById("q-strategy").value,
+        wrapup_time: parseInt(document.getElementById("q-wrapup").value) || 0,
+        max_len: parseInt(document.getElementById("q-maxlen").value) || 0,
+        timeout: parseInt(document.getElementById("q-timeout").value) || 60,
         is_active: true,
       };
       try {
@@ -230,10 +230,10 @@
           await post("/queues", payload);
         }
         form.reset();
-        form.q_strategy.value = "ringall";
-        form.q_timeout.value = 60;
-        form.q_wrapup.value = 0;
-        form.q_maxlen.value = 0;
+        document.getElementById("q-strategy").value = "ringall";
+        document.getElementById("q-timeout").value = 60;
+        document.getElementById("q-wrapup").value = 0;
+        document.getElementById("q-maxlen").value = 0;
         editingId = null;
         document.getElementById("q-id").value = "";
         cancelBtn.style.display = "none";
@@ -245,10 +245,10 @@
 
     cancelBtn.addEventListener("click", () => {
       form.reset();
-      form.q_strategy.value = "ringall";
-      form.q_timeout.value = 60;
-      form.q_wrapup.value = 0;
-      form.q_maxlen.value = 0;
+      document.getElementById("q-strategy").value = "ringall";
+      document.getElementById("q-timeout").value = 60;
+      document.getElementById("q-wrapup").value = 0;
+      document.getElementById("q-maxlen").value = 0;
       editingId = null;
       document.getElementById("q-id").value = "";
       cancelBtn.style.display = "none";
@@ -256,10 +256,10 @@
 
     openAdd.addEventListener("click", () => {
       form.reset();
-      form.q_strategy.value = "ringall";
-      form.q_timeout.value = 60;
-      form.q_wrapup.value = 0;
-      form.q_maxlen.value = 0;
+      document.getElementById("q-strategy").value = "ringall";
+      document.getElementById("q-timeout").value = 60;
+      document.getElementById("q-wrapup").value = 0;
+      document.getElementById("q-maxlen").value = 0;
       editingId = null;
       document.getElementById("q-id").value = "";
       cancelBtn.style.display = "none";
@@ -287,14 +287,14 @@
       e.preventDefault();
       if (!currentQueueId) return;
       const payload = {
-        interface: qmForm.qm_interface.value,
-        penalty: parseInt(qmForm.qm_penalty.value) || 0,
+        interface: document.getElementById("qm-interface").value,
+        penalty: parseInt(document.getElementById("qm-penalty").value) || 0,
         is_active: true,
       };
       try {
         await post(`/queues/${currentQueueId}/members`, payload);
         qmForm.reset();
-        qmForm.qm_penalty.value = 0;
+        document.getElementById("qm-penalty").value = 0;
         await loadMembers(currentQueueId);
       } catch (err) {
         alert(err.message || "Failed to add member");
@@ -307,12 +307,12 @@
         const q = data.find((x) => x.id === id);
         if (!q) return;
         document.getElementById("q-id").value = q.id;
-        form.q_name.value = q.name;
-        form.q_number.value = q.number;
-        form.q_strategy.value = q.strategy;
-        form.q_timeout.value = q.timeout;
-        form.q_wrapup.value = q.wrapup_time;
-        form.q_maxlen.value = q.max_len;
+        document.getElementById("q-name").value = q.name;
+        document.getElementById("q-number").value = q.number;
+        document.getElementById("q-strategy").value = q.strategy;
+        document.getElementById("q-timeout").value = q.timeout;
+        document.getElementById("q-wrapup").value = q.wrapup_time;
+        document.getElementById("q-maxlen").value = q.max_len;
         editingId = q.id;
         cancelBtn.style.display = "inline-block";
       },

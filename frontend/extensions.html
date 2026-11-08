@@ -162,12 +162,12 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const payload = {
-        extension: form.ext_number.value,
-        name: form.ext_name.value,
-        secret: form.ext_secret.value,
-        context: form.ext_context.value || "from-internal",
-        email: form.ext_email.value,
-        voicemail_enabled: form.ext_vm.checked,
+        extension: document.getElementById("ext-number").value,
+        name: document.getElementById("ext-name").value,
+        secret: document.getElementById("ext-secret").value,
+        context: document.getElementById("ext-context").value || "from-internal",
+        email: document.getElementById("ext-email").value,
+        voicemail_enabled: document.getElementById("ext-vm").checked,
         is_active: true,
       };
       try {
@@ -206,12 +206,12 @@
         const e = data.items.find((x) => x.id === id);
         if (!e) return;
         document.getElementById("ext-id").value = e.id;
-        form.ext_number.value = e.extension;
-        form.ext_name.value = e.name;
-        form.ext_secret.value = e.secret || "";
-        form.ext_context.value = e.context;
-        form.ext_email.value = e.email || "";
-        form.ext_vm.checked = e.voicemail_enabled;
+        document.getElementById("ext-number").value = e.extension;
+        document.getElementById("ext-name").value = e.name;
+        document.getElementById("ext-secret").value = e.secret || "";
+        document.getElementById("ext-context").value = e.context;
+        document.getElementById("ext-email").value = e.email || "";
+        document.getElementById("ext-vm").checked = e.voicemail_enabled;
         editingId = e.id;
         cancelBtn.style.display = "inline-block";
       },

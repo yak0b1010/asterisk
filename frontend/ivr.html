@@ -208,10 +208,10 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const payload = {
-        name: form.ivr_name.value,
-        extension: form.ivr_extension.value,
-        prompt_file: form.ivr_prompt.value,
-        timeout: parseInt(form.ivr_timeout.value) || 5,
+        name: document.getElementById("ivr-name").value,
+        extension: document.getElementById("ivr-extension").value,
+        prompt_file: document.getElementById("ivr-prompt").value,
+        timeout: parseInt(document.getElementById("ivr-timeout").value) || 5,
         invalid_prompt_file: "",
         is_active: true,
       };
@@ -222,7 +222,7 @@
           await post("/ivr", payload);
         }
         form.reset();
-        form.ivr_timeout.value = 5;
+        document.getElementById("ivr-timeout").value = 5;
         editingId = null;
         document.getElementById("ivr-id").value = "";
         cancelBtn.style.display = "none";
@@ -234,7 +234,7 @@
 
     cancelBtn.addEventListener("click", () => {
       form.reset();
-      form.ivr_timeout.value = 5;
+      document.getElementById("ivr-timeout").value = 5;
       editingId = null;
       document.getElementById("ivr-id").value = "";
       cancelBtn.style.display = "none";
@@ -242,7 +242,7 @@
 
     openAdd.addEventListener("click", () => {
       form.reset();
-      form.ivr_timeout.value = 5;
+      document.getElementById("ivr-timeout").value = 5;
       editingId = null;
       document.getElementById("ivr-id").value = "";
       cancelBtn.style.display = "none";
@@ -270,9 +270,9 @@
       e.preventDefault();
       if (!currentIvrId) return;
       const payload = {
-        digit: routeForm.ivr_route_digit.value,
-        destination_type: routeForm.ivr_route_type.value,
-        destination: routeForm.ivr_route_dest.value,
+        digit: document.getElementById("ivr-route-digit").value,
+        destination_type: document.getElementById("ivr-route-type").value,
+        destination: document.getElementById("ivr-route-dest").value,
       };
       try {
         await post(`/ivr/${currentIvrId}/routes`, payload);
@@ -289,10 +289,10 @@
         const i = data.find((x) => x.id === id);
         if (!i) return;
         document.getElementById("ivr-id").value = i.id;
-        form.ivr_name.value = i.name;
-        form.ivr_extension.value = i.extension;
-        form.ivr_prompt.value = i.prompt_file || "";
-        form.ivr_timeout.value = i.timeout;
+        document.getElementById("ivr-name").value = i.name;
+        document.getElementById("ivr-extension").value = i.extension;
+        document.getElementById("ivr-prompt").value = i.prompt_file || "";
+        document.getElementById("ivr-timeout").value = i.timeout;
         editingId = i.id;
         cancelBtn.style.display = "inline-block";
       },

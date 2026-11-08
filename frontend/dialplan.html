@@ -164,12 +164,12 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const payload = {
-        pattern: form.dp_pattern.value,
-        context: form.dp_context.value,
-        destination: form.dp_destination.value,
-        priority: parseInt(form.dp_priority.value) || 1,
-        application: form.dp_application.value,
-        description: form.dp_description.value,
+        pattern: document.getElementById("dp-pattern").value,
+        context: document.getElementById("dp-context").value,
+        destination: document.getElementById("dp-destination").value,
+        priority: parseInt(document.getElementById("dp-priority").value) || 1,
+        application: document.getElementById("dp-application").value,
+        description: document.getElementById("dp-description").value,
         is_active: true,
       };
       try {
@@ -179,8 +179,8 @@
           await post("/dialplan", payload);
         }
         form.reset();
-        form.dp_priority.value = 1;
-        form.dp_application.value = "Dial";
+        document.getElementById("dp-priority").value = 1;
+        document.getElementById("dp-application").value = "Dial";
         editingId = null;
         document.getElementById("dp-id").value = "";
         cancelBtn.style.display = "none";
@@ -192,8 +192,8 @@
 
     cancelBtn.addEventListener("click", () => {
       form.reset();
-      form.dp_priority.value = 1;
-      form.dp_application.value = "Dial";
+      document.getElementById("dp-priority").value = 1;
+      document.getElementById("dp-application").value = "Dial";
       editingId = null;
       document.getElementById("dp-id").value = "";
       cancelBtn.style.display = "none";
@@ -201,8 +201,8 @@
 
     openAdd.addEventListener("click", () => {
       form.reset();
-      form.dp_priority.value = 1;
-      form.dp_application.value = "Dial";
+      document.getElementById("dp-priority").value = 1;
+      document.getElementById("dp-application").value = "Dial";
       editingId = null;
       document.getElementById("dp-id").value = "";
       cancelBtn.style.display = "none";
@@ -214,12 +214,12 @@
         const d = data.find((x) => x.id === id);
         if (!d) return;
         document.getElementById("dp-id").value = d.id;
-        form.dp_pattern.value = d.pattern;
-        form.dp_context.value = d.context;
-        form.dp_destination.value = d.destination;
-        form.dp_priority.value = d.priority;
-        form.dp_application.value = d.application;
-        form.dp_description.value = d.description || "";
+        document.getElementById("dp-pattern").value = d.pattern;
+        document.getElementById("dp-context").value = d.context;
+        document.getElementById("dp-destination").value = d.destination;
+        document.getElementById("dp-priority").value = d.priority;
+        document.getElementById("dp-application").value = d.application;
+        document.getElementById("dp-description").value = d.description || "";
         editingId = d.id;
         cancelBtn.style.display = "inline-block";
       },
