@@ -230,6 +230,8 @@ test: ## Smoke-test the running container
 	docker exec $(CONTAINER) asterisk -rx "odbc show all"
 	docker exec $(CONTAINER) asterisk -rx "pjsip show transports"
 	docker exec $(CONTAINER) asterisk -rx "pjsip show endpoints"
+	docker exec $(CONTAINER) asterisk -rx "queue show"
+	docker exec $(CONTAINER) asterisk -rx "voicemail show users"
 	docker exec $(CONTAINER) asterisk -rx "rtp show settings"
 	docker exec $(CONTAINER) asterisk -rx "http show status"
 	docker exec $(CONTAINER) asterisk -rx "dialplan show internal"

@@ -35,7 +35,7 @@ if [ "$(id -u)" -ne 0 ]; then
   SUDO="sudo"
 fi
 
-case "${RTP_RANGE:-10000-10199}" in
+case "${RTP_RANGE:-}" in
 *-*) ;;
 *) die "RTP_RANGE must be start-end (got '${RTP_RANGE:-}')" ;;
 esac
@@ -50,11 +50,11 @@ add_port() {
     fi
   fi
 }
-add_port "${SIP_PORT:-5060}/udp"
-add_port "${RTP_RANGE:-10000-10199}/udp"
-add_port "${HTTP_PORT:-8088}/tcp"
-add_port "${WSS_PORT:-8089}/tcp"
-add_port "${DASHBOARD_PORT:-8080}/tcp"
+add_port "${SIP_PORT:-}/udp"
+add_port "${RTP_RANGE:-}/udp"
+add_port "${HTTP_PORT:-}/tcp"
+add_port "${WSS_PORT:-}/tcp"
+add_port "${DASHBOARD_PORT:-}/tcp"
 
 firewalld_running() {
   [ "$(firewall-cmd --state 2>/dev/null || true)" = "running" ]
