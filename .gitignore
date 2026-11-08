@@ -947,3 +947,4 @@ $RECYCLE.BIN/
 
 !asterisk/conf/scripts
 !asterisk/conf/scripts/**
+asterisk/conf/samples
