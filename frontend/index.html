@@ -35,6 +35,11 @@
     </div>
   </div>
 
+  <script>
+    window.API_BASE = window.location.origin
+      .replace(':8080', ':5000')
+      .replace(':80', ':5000');
+  </script>
   <script type="module">
     import { api, setSession } from "./js/api.js";
     const form = document.getElementById("login-form");
