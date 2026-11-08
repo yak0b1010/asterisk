@@ -77,27 +77,33 @@ fi
 
 # ---- PostgreSQL realtime over ODBC (realtime mode only) ------------------
 if [ "${MODE}" = "realtime" ]; then
-  if [ -n "${DB_PASSWORD:-}" ]; then
+    if [ -n "${DB_PASSWORD:-}" ]; then
+      for v in DB_HOST DB_NAME DB_USER DB_PASSWORD; do
+        if [ -z "${!v:-}" ]; then
+          log "realtime mode but $v unset - ODBC will not connect"
+          exit 1   # or skip ODBC rendering and continue standalone-only
+        fi
+      done
     cat >/etc/odbc.ini <<EOF
 [asterisk-pgsql]
 Description = Asterisk realtime datasource
 Driver      = PostgreSQL Unicode
-Servername  = ${DB_HOST:-postgres}
-Port        = ${DB_PORT:-5432}
-Database    = ${DB_NAME:-asterisk}
+Servername  = ${DB_HOST}
+Port        = ${DB_PORT}
+Database    = ${DB_NAME}
 EOF
 
     cat >/etc/asterisk/res_odbc.conf <<EOF
 [asterisk]
 enabled         => yes
 dsn             => asterisk-pgsql
-username        => ${DB_USER:-asterisk}
+username        => ${DB_USER}
 password        => ${DB_PASSWORD}
 pre-connect     => yes
 max_connections => 5
 sanitysql       => select 1
 EOF
-    log "rendered odbc.ini + res_odbc.conf (host=${DB_HOST:-postgres} db=${DB_NAME:-asterisk})"
+    log "rendered odbc.ini + res_odbc.conf (host=\"${DB_HOST}\" db=\"${DB_NAME}\")"
   else
     log "realtime mode but DB_PASSWORD unset - ODBC will not connect"
   fi
