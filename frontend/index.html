@@ -1,12 +1,68 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Asterisk Appliance</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card nb-card">
+      <div class="login-brand">
+        <h1>ASTERISK<br>APPLIANCE</h1>
+        <p>IP-Telephony Management · Admin Dashboard</p>
+      </div>
+
+      <div id="login-alert" class="alert error" style="display:none;"></div>
+
+      <form id="login-form" novalidate>
+        <div class="nb-form-group">
+          <label class="nb-label" for="username">Username</label>
+          <input class="nb-input" id="username" name="username" placeholder="admin" required>
+        </div>
+        <div class="nb-form-group">
+          <label class="nb-label" for="password">Password</label>
+          <input class="nb-input" id="password" name="password" type="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="nb-btn primary" style="width:100%;">Sign In</button>
+      </form>
+
+      <p style="margin-top:1.5rem; text-align:center; font-size:0.85rem; color:var(--nb-darkgray); text-transform:uppercase; letter-spacing:0.5px;">
+        Default: admin / admin123
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api, setSession } from "./js/api.js";
+    const form = document.getElementById("login-form");
+    const alertEl = document.getElementById("login-alert");
+    const btn = form.querySelector("button");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      alertEl.style.display = "none";
+      btn.textContent = "Signing in...";
+      btn.disabled = true;
+      try {
+        const data = await api("/auth/login", {
+          method: "POST",
+          body: {
+            username: form.username.value,
+            password: form.password.value,
+          },
+        });
+        setSession(data.token, data.user);
+        window.location.href = "dashboard.html";
+      } catch (err) {
+        alertEl.textContent = err.message || "Login failed";
+        alertEl.style.display = "block";
+        btn.textContent = "Sign In";
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
 </html>

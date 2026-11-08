@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Asterisk<br>Appliance</h2>
+        <p>Management Dashboard</p>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="dashboard.html" class="active">Dashboard</a></li>
+        <li><a href="extensions.html">Extensions</a></li>
+        <li><a href="users.html">Users</a></li>
+        <li><a href="dialplan.html">Dialplan</a></li>
+        <li><a href="voicemail.html">Voicemail</a></li>
+        <li><a href="queues.html">Queues</a></li>
+        <li><a href="ivr.html">IVR</a></li>
+        <li><a href="cdr.html">CDR</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <span data-user></span><br>
+        <span data-user-role></span>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>Dashboard</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge"><span data-user></span> <span data-user-role></span></span>
+          <button class="nb-btn ghost small" data-logout>Logout</button>
+        </div>
+      </header>
+
+      <h2 class="page-title">System Overview</h2>
+
+      <div class="dashboard-grid">
+        <div class="stat-card accent-blue">
+          <div class="stat-icon">☎</div>
+          <p class="stat-value" id="stat-extensions">—</p>
+          <p class="stat-label">Extensions</p>
+        </div>
+        <div class="stat-card accent-pink">
+          <div class="stat-icon">📞</div>
+          <p class="stat-value" id="stat-calls">—</p>
+          <p class="stat-label">Active Calls</p>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-icon">👥</div>
+          <p class="stat-value" id="stat-users">—</p>
+          <p class="stat-label">Users</p>
+        </div>
+        <div class="stat-card accent-orange">
+          <div class="stat-icon">📋</div>
+          <p class="stat-value" id="stat-queues">—</p>
+          <p class="stat-label">Queues</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>Asterisk Status</span>
+          <span class="nb-badge info" id="asterisk-status">placeholder</span>
+        </div>
+        <div class="nb-card" style="padding:1.5rem;">
+          <p id="asterisk-msg">Fetching Asterisk monitoring data…</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>Quick Actions</span>
+        </div>
+        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+          <a href="extensions.html" class="nb-btn primary">Manage Extensions</a>
+          <a href="users.html" class="nb-btn">Manage Users</a>
+          <a href="queues.html" class="nb-btn">Manage Queues</a>
+          <a href="cdr.html" class="nb-btn">View CDR</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+  <script type="module">
+    import { api } from "./js/api.js";
+
+    async function loadStats() {
+      try {
+        const data = await api("/dashboard/stats");
+        document.getElementById("stat-extensions").textContent = data.extensions_total;
+        document.getElementById("stat-calls").textContent = data.active_calls;
+        document.getElementById("stat-users").textContent = data.users_total;
+        document.getElementById("stat-queues").textContent = data.queues_total;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function loadAsterisk() {
+      try {
+        const data = await api("/monitoring/asterisk");
+        const el = document.getElementById("asterisk-status");
+        el.textContent = data.status.toUpperCase();
+        el.className = "nb-badge " + (data.status === "operational" ? "success" : "warning");
+        document.getElementById("asterisk-msg").textContent = data.message || "No data available.";
+      } catch (e) {
+        document.getElementById("asterisk-msg").textContent = "Asterisk monitoring not wired yet (placeholder).";
+      }
+    }
+
+    loadStats();
+    loadAsterisk();
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+/* Additional component overrides — kept separate for clarity */
+
+.nb-table .actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--nb-darkgray);
+}
+
+.empty-state .nb-badge {
+  font-size: 4rem;
+  display: block;
+  margin: 0 auto 1rem;
+  opacity: 0.2;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.pagination .nb-btn {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+}
+
+.loader .nb-badge {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.3;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.skeleton {
+  background: var(--nb-gray);
+  border: 4px solid var(--nb-black);
+  box-shadow: 4px 4px 0 var(--nb-black);
+  border-radius: 0;
+  height: 1.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.skeleton.title { width: 60%; height: 1.5rem; }
+.skeleton.line { width: 100%; height: 1rem; }
+.skeleton.short { width: 35%; }
+
+/* Modal (simple) */
+.modal {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal.hidden { display: none; }
+
+.modal-card {
+  background: var(--nb-surface);
+  border: var(--nb-border-width) solid var(--nb-black);
+  box-shadow: 8px 8px 0 var(--nb-shadow);
+  padding: 2rem;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-close {
+  background: var(--nb-black);
+  color: var(--nb-white);
+  border: 4px solid var(--nb-black);
+  box-shadow: 4px 4px 0 var(--nb-shadow);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--nb-accent-dark);
+  border-color: var(--nb-accent-dark);
+}
