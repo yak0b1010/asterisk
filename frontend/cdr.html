@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CDR — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Asterisk<br>Appliance</h2>
+        <p>Management Dashboard</p>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="extensions.html">Extensions</a></li>
+        <li><a href="users.html">Users</a></li>
+        <li><a href="dialplan.html">Dialplan</a></li>
+        <li><a href="voicemail.html">Voicemail</a></li>
+        <li><a href="queues.html">Queues</a></li>
+        <li><a href="ivr.html">IVR</a></li>
+        <li><a href="cdr.html" class="active">CDR</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <span data-user></span><br>
+        <span data-user-role></span>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>Call Detail Records</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge"><span data-user></span> <span data-user-role></span></span>
+          <button class="nb-btn primary small" id="export-cdr">Export CSV</button>
+          <button class="nb-btn ghost small" data-logout>Logout</button>
+        </div>
+      </header>
+
+      <h2 class="page-title">CDR &amp; Statistics</h2>
+      <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
+        Call detail records with filters. Export to CSV.
+      </p>
+
+      <div class="nb-card" style="padding:1.5rem; margin-bottom:1.5rem;">
+        <form id="cdr-filters" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; align-items:end;">
+          <div class="nb-form-group">
+            <label class="nb-label">Source</label>
+            <input class="nb-input" id="f-src" name="src" placeholder="from extension">
+          </div>
+          <div class="nb-form-group">
+            <label class="nb-label">Destination</label>
+            <input class="nb-input" id="f-dst" name="dst" placeholder="to extension">
+          </div>
+          <div class="nb-form-group">
+            <label class="nb-label">Disposition</label>
+            <select class="nb-input" id="f-disp" name="disposition">
+              <option value="">any</option>
+              <option value="ANSWERED">Answered</option>
+              <option value="BUSY">Busy</option>
+              <option value="NO ANSWER">No Answer</option>
+              <option value="FAILED">Failed</option>
+              <option value="CONGESTION">Congestion</option>
+            </select>
+          </div>
+          <div class="nb-form-group">
+            <label class="nb-label">From Date</label>
+            <input class="nb-input" id="f-from" name="date_from" type="date">
+          </div>
+          <div class="nb-form-group">
+            <label class="nb-label">To Date</label>
+            <input class="nb-input" id="f-to" name="date_to" type="date">
+          </div>
+          <div style="display:flex; gap:1rem;">
+            <button type="submit" class="nb-btn primary">Filter</button>
+            <button type="button" class="nb-btn ghost" id="cdr-clear">Clear</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>Records</span>
+          <span class="nb-badge" id="cdr-count">0</span>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Channel</th>
+                <th>Duration</th>
+                <th>Disposition</th>
+                <th>Unique ID</th>
+              </tr>
+            </thead>
+            <tbody id="cdr-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = window.location.origin
+      .replace(':8080', ':5000')
+      .replace(':80', ':5000');
+  </script>
+  <script type="module" src="./js/app.js?v=2"></script>
+  <script type="module">
+    import { api, get } from "./js/api.js";
+
+    const form = document.getElementById("cdr-filters");
+    const tbody = document.getElementById("cdr-table-body");
+    const countEl = document.getElementById("cdr-count");
+    const exportBtn = document.getElementById("export-cdr");
+    const clearBtn = document.getElementById("cdr-clear");
+
+    async function load() {
+      const params = new URLSearchParams();
+      for (const [k, v] of new FormData(form)) {
+        if (v) params.append(k, v);
+      }
+      const data = await get("/cdr?" + params.toString());
+      tbody.innerHTML = "";
+      countEl.textContent = data.total;
+      data.items.forEach((c) => {
+        const date = c.calldate ? new Date(c.calldate).toLocaleString() : "—";
+        const dispClass = {
+          ANSWERED: "success",
+          BUSY: "warning",
+          "NO ANSWER": "warning",
+          FAILED: "danger",
+          CONGESTION: "danger",
+        }[c.disposition] || "dark";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${date}</td>
+          <td><strong>${c.src || "—"}</strong></td>
+          <td>${c.dst || "—"}</td>
+          <td>${c.channel || "—"}</td>
+          <td>${c.duration ? c.duration + "s" : "—"}</td>
+          <td><span class="nb-badge ${dispClass} small">${c.disposition || "—"}</span></td>
+          <td style="font-size:0.8rem; font-family:monospace;">${c.uniqueid || "—"}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      load();
+    });
+
+    clearBtn.addEventListener("click", () => {
+      form.reset();
+      load();
+    });
+
+    exportBtn.addEventListener("click", async () => {
+      const params = new URLSearchParams();
+      for (const [k, v] of new FormData(form)) {
+        if (v) params.append(k, v);
+      }
+      try {
+        const csv = await api("/cdr/export?" + params.toString());
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cdr_export.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.message || "Export failed");
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

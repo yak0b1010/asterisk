@@ -4,7 +4,10 @@ SHELL := /bin/bash
 -include .env
 export
 
-.PHONY: help env up run down logs ps build test clean
+# Compose project name (matches docker-compose.yaml `name:`)
+COMPOSE ?= docker compose
+
+.PHONY: help env up down logs ps build stack-up stack-down stack-logs stack-ps stack-build clean
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
 	 awk 'BEGIN{FS=":.*?## "};{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -13,23 +16,33 @@ env: ## Create .env from .env.example if missing
 	@test -f .env || cp .env.example .env
 	@echo ".env ready"
 
-up: ## Start the PBX (full stack pending backend/dashboard)
-	$(MAKE) -C asterisk up
+# ── Full appliance stack (Postgres + Backend + Frontend) ──
+stack-up: env ## Start the full appliance stack (postgres + backend + frontend)
+	$(COMPOSE) up -d
+	@echo "Stack up. Frontend: http://localhost:${FRONTEND_HOST_PORT:-8080}  Backend: http://localhost:${BACKEND_HOST_PORT:-5000}"
 
+stack-down: ## Stop the full appliance stack
+	$(COMPOSE) down
+
+stack-logs: ## Follow the full appliance stack logs
+	$(COMPOSE) logs -f
+
+stack-ps: ## Show the full appliance stack containers
+	$(COMPOSE) ps
+
+stack-build: ## Build all appliance images
+	$(COMPOSE) build
+
+# alias for convenience
+up: stack-up ## Start the full appliance stack
+down: stack-down ## Stop the full appliance stack
+logs: stack-logs ## Follow the full appliance stack logs
+ps: stack-ps ## Show the full appliance stack containers
+build: stack-build ## Build all appliance images
+
+# ── Legacy PBX-only targets (Asterisk developer) ──
 run: ## Apply firewall rules and start the PBX
 	$(MAKE) -C asterisk run
-
-down: ## Stop the PBX
-	$(MAKE) -C asterisk down
-
-logs: ## Follow the PBX logs
-	$(MAKE) -C asterisk logs
-
-ps: ## Show the PBX container
-	$(MAKE) -C asterisk ps
-
-build: ## Build the PBX image
-	$(MAKE) -C asterisk build
 
 test: ## Smoke-test the PBX
 	$(MAKE) -C asterisk test

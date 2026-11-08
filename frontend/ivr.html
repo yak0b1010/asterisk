@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IVR — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Asterisk<br>Appliance</h2>
+        <p>Management Dashboard</p>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="extensions.html">Extensions</a></li>
+        <li><a href="users.html">Users</a></li>
+        <li><a href="dialplan.html">Dialplan</a></li>
+        <li><a href="voicemail.html">Voicemail</a></li>
+        <li><a href="queues.html">Queues</a></li>
+        <li><a href="ivr.html" class="active">IVR</a></li>
+        <li><a href="cdr.html">CDR</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <span data-user></span><br>
+        <span data-user-role></span>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>IVR Builder</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge"><span data-user></span> <span data-user-role></span></span>
+          <button class="nb-btn ghost small" id="open-add-ivr">Add IVR</button>
+          <button class="nb-btn ghost small" data-logout>Logout</button>
+        </div>
+      </header>
+
+      <h2 class="page-title">Interactive Voice Response</h2>
+      <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
+        IVR menus and digit destinations read by Asterisk via ODBC realtime.
+      </p>
+
+      <div id="ivr-alert" class="alert error" style="display:none;"></div>
+
+      <div class="form-card nb-card" style="padding:1.5rem; max-width:640px; margin-bottom:2rem;">
+        <h3 style="margin-top:0; text-transform:uppercase; font-size:1rem;">Add / Edit IVR Menu</h3>
+        <form id="ivr-form" novalidate>
+          <input type="hidden" id="ivr-id">
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">IVR Name</label>
+              <input class="nb-input" id="ivr-name" name="name" placeholder="e.g. Main Menu" required>
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Extension</label>
+              <input class="nb-input" id="ivr-extension" name="extension" placeholder="e.g. 5000" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Prompt File</label>
+              <input class="nb-input" id="ivr-prompt" name="prompt_file" placeholder="custom/main-menu.wav">
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Timeout (sec)</label>
+              <input class="nb-input" id="ivr-timeout" name="timeout" type="number" value="5">
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; margin-top:1rem;">
+            <button type="submit" class="nb-btn primary">Save IVR</button>
+            <button type="button" class="nb-btn ghost" id="ivr-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>IVR Menus</span>
+          <span class="nb-badge" id="ivr-count">0</span>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Extension</th>
+                <th>Prompt</th>
+                <th>Timeout</th>
+                <th>Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ivr-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section" id="routes-section" style="display:none;">
+        <div class="section-title">
+          <span>IVR Routes — <span id="ivr-routes-name"></span></span>
+          <button class="nb-btn ghost small" onclick="document.getElementById('routes-section').style.display='none'">Back</button>
+        </div>
+        <div class="form-card nb-card" style="padding:1.5rem; max-width:700px; margin-bottom:1rem;">
+          <h4 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">Add Digit Route</h4>
+          <form id="ivr-route-form" novalidate>
+            <input type="hidden" id="ivr-route-ivr-id">
+            <div class="form-row">
+              <div class="nb-form-group">
+                <label class="nb-label">Digit</label>
+                <input class="nb-input" id="ivr-route-digit" name="digit" placeholder="0-9, *, #" required>
+              </div>
+              <div class="nb-form-group">
+                <label class="nb-label">Destination Type</label>
+                <select class="nb-input" id="ivr-route-type" name="destination_type">
+                  <option value="extension">Extension</option>
+                  <option value="queue">Queue</option>
+                  <option value="ivr">IVR</option>
+                  <option value="voicemail">Voicemail</option>
+                  <option value="hangup">Hangup</option>
+                </select>
+              </div>
+              <div class="nb-form-group">
+                <label class="nb-label">Destination</label>
+                <input class="nb-input" id="ivr-route-dest" name="destination" placeholder="e.g. 1001 or queue1" required>
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; margin-top:1rem;">
+              <button type="submit" class="nb-btn primary">Add Route</button>
+              <button type="button" class="nb-btn ghost" id="ivr-route-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Digit</th>
+                <th>Destination Type</th>
+                <th>Destination</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ivr-routes-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = window.location.origin
+      .replace(':8080', ':5000')
+      .replace(':80', ':5000');
+  </script>
+  <script type="module" src="./js/app.js?v=2"></script>
+  <script type="module">
+    import { api, get, post, put, del } from "./js/api.js";
+
+    const form = document.getElementById("ivr-form");
+    const alertEl = document.getElementById("ivr-alert");
+    const tbody = document.getElementById("ivr-table-body");
+    const countEl = document.getElementById("ivr-count");
+    const openAdd = document.getElementById("open-add-ivr");
+    const cancelBtn = document.getElementById("ivr-cancel");
+    let editingId = null;
+
+    // Routes sub-state
+    const routesSection = document.getElementById("routes-section");
+    const routeForm = document.getElementById("ivr-route-form");
+    const routesTbody = document.getElementById("ivr-routes-table-body");
+    const routesName = document.getElementById("ivr-routes-name");
+    let currentIvrId = null;
+
+    async function loadIvr() {
+      const data = await get("/ivr");
+      tbody.innerHTML = "";
+      countEl.textContent = data.length;
+      data.forEach((i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${i.name}</strong></td>
+          <td>${i.extension}</td>
+          <td>${i.prompt_file || "—"}</td>
+          <td>${i.timeout}s</td>
+          <td>${i.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
+          <td class="actions">
+            <button class="nb-btn small" onclick="app.editIvr(${i.id})">Edit</button>
+            <button class="nb-btn small" onclick="app.openRoutes(${i.id}, '${i.name}')">Routes</button>
+            <button class="nb-btn small danger" onclick="app.deleteIvr(${i.id})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showAlert(msg) {
+      alertEl.textContent = msg;
+      alertEl.style.display = "block";
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById("ivr-name").value,
+        extension: document.getElementById("ivr-extension").value,
+        prompt_file: document.getElementById("ivr-prompt").value,
+        timeout: parseInt(document.getElementById("ivr-timeout").value) || 5,
+        invalid_prompt_file: "",
+        is_active: true,
+      };
+      try {
+        if (editingId) {
+          await put(`/ivr/${editingId}`, payload);
+        } else {
+          await post("/ivr", payload);
+        }
+        form.reset();
+        document.getElementById("ivr-timeout").value = 5;
+        editingId = null;
+        document.getElementById("ivr-id").value = "";
+        cancelBtn.style.display = "none";
+        await loadIvr();
+      } catch (err) {
+        showAlert(err.message || "Failed to save IVR");
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      form.reset();
+      document.getElementById("ivr-timeout").value = 5;
+      editingId = null;
+      document.getElementById("ivr-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    openAdd.addEventListener("click", () => {
+      form.reset();
+      document.getElementById("ivr-timeout").value = 5;
+      editingId = null;
+      document.getElementById("ivr-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    // Routes
+    async function loadRoutes(ivrId) {
+      const data = await get(`/ivr/${ivrId}/routes`);
+      routesTbody.innerHTML = "";
+      data.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${r.digit}</strong></td>
+          <td>${r.destination_type}</td>
+          <td>${r.destination}</td>
+          <td class="actions">
+            <button class="nb-btn small danger" onclick="app.deleteRoute(${ivrId}, ${r.id})">Remove</button>
+          </td>
+        `;
+        routesTbody.appendChild(tr);
+      });
+    }
+
+    routeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!currentIvrId) return;
+      const payload = {
+        digit: document.getElementById("ivr-route-digit").value,
+        destination_type: document.getElementById("ivr-route-type").value,
+        destination: document.getElementById("ivr-route-dest").value,
+      };
+      try {
+        await post(`/ivr/${currentIvrId}/routes`, payload);
+        routeForm.reset();
+        await loadRoutes(currentIvrId);
+      } catch (err) {
+        alert(err.message || "Failed to add route");
+      }
+    });
+
+    window.app = {
+      editIvr: async (id) => {
+        const data = await get("/ivr");
+        const i = data.find((x) => x.id === id);
+        if (!i) return;
+        document.getElementById("ivr-id").value = i.id;
+        document.getElementById("ivr-name").value = i.name;
+        document.getElementById("ivr-extension").value = i.extension;
+        document.getElementById("ivr-prompt").value = i.prompt_file || "";
+        document.getElementById("ivr-timeout").value = i.timeout;
+        editingId = i.id;
+        cancelBtn.style.display = "inline-block";
+      },
+      deleteIvr: async (id) => {
+        if (!confirm("Delete this IVR menu?")) return;
+        await del(`/ivr/${id}`);
+        await loadIvr();
+      },
+      openRoutes: async (ivrId, name) => {
+        currentIvrId = ivrId;
+        routesName.textContent = name;
+        document.getElementById("ivr-route-ivr-id").value = ivrId;
+        routesSection.style.display = "block";
+        await loadRoutes(ivrId);
+      },
+      deleteRoute: async (ivrId, rId) => {
+        if (!confirm("Remove this route?")) return;
+        await del(`/ivr/${ivrId}/routes/${rId}`);
+        await loadRoutes(ivrId);
+      },
+    };
+
+    loadIvr();
+  </script>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queues — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Asterisk<br>Appliance</h2>
+        <p>Management Dashboard</p>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="extensions.html">Extensions</a></li>
+        <li><a href="users.html">Users</a></li>
+        <li><a href="dialplan.html">Dialplan</a></li>
+        <li><a href="voicemail.html">Voicemail</a></li>
+        <li><a href="queues.html" class="active">Queues</a></li>
+        <li><a href="ivr.html">IVR</a></li>
+        <li><a href="cdr.html">CDR</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <span data-user></span><br>
+        <span data-user-role></span>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>Queues</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge"><span data-user></span> <span data-user-role></span></span>
+          <button class="nb-btn ghost small" id="open-add-q">Add Queue</button>
+          <button class="nb-btn ghost small" data-logout>Logout</button>
+        </div>
+      </header>
+
+      <h2 class="page-title">Call Center Queues</h2>
+      <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
+        Queues and agents read by Asterisk via ODBC realtime queue / queue_members.
+      </p>
+
+      <div id="q-alert" class="alert error" style="display:none;"></div>
+
+      <div class="form-card nb-card" style="padding:1.5rem; max-width:640px; margin-bottom:2rem;">
+        <h3 style="margin-top:0; text-transform:uppercase; font-size:1rem;">Add / Edit Queue</h3>
+        <form id="q-form" novalidate>
+          <input type="hidden" id="q-id">
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Queue Name</label>
+              <input class="nb-input" id="q-name" name="name" placeholder="e.g. Support" required>
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Queue Number</label>
+              <input class="nb-input" id="q-number" name="number" placeholder="e.g. 6001" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Strategy</label>
+              <select class="nb-input" id="q-strategy" name="strategy">
+                <option value="ringall">Ring All</option>
+                <option value="leastrecent">Least Recent</option>
+                <option value="fewestcalls">Fewest Calls</option>
+                <option value="random">Random</option>
+                <option value="rrmemory">Round Robin w/ Memory</option>
+              </select>
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Timeout (sec)</label>
+              <input class="nb-input" id="q-timeout" name="timeout" type="number" value="60">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Wrap-up Time (sec)</label>
+              <input class="nb-input" id="q-wrapup" name="wrapup_time" type="number" value="0">
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Max Length</label>
+              <input class="nb-input" id="q-maxlen" name="max_len" type="number" value="0" placeholder="0 = unlimited">
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; margin-top:1rem;">
+            <button type="submit" class="nb-btn primary">Save Queue</button>
+            <button type="button" class="nb-btn ghost" id="q-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>Queues</span>
+          <span class="nb-badge" id="q-count">0</span>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Number</th>
+                <th>Strategy</th>
+                <th>Members</th>
+                <th>Timeout</th>
+                <th>Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="q-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section" id="members-section" style="display:none;">
+        <div class="section-title">
+          <span>Queue Members — <span id="qm-queue-name"></span></span>
+          <button class="nb-btn ghost small" onclick="document.getElementById('members-section').style.display='none'">Back</button>
+        </div>
+        <div class="form-card nb-card" style="padding:1.5rem; max-width:560px; margin-bottom:1rem;">
+          <form id="qm-form" novalidate>
+            <input type="hidden" id="qm-queue-id">
+            <div class="form-row">
+              <div class="nb-form-group">
+                <label class="nb-label">Interface (e.g. PJSIP/1001)</label>
+                <input class="nb-input" id="qm-interface" name="interface" placeholder="PJSIP/1001" required>
+              </div>
+              <div class="nb-form-group">
+                <label class="nb-label">Penalty</label>
+                <input class="nb-input" id="qm-penalty" name="penalty" type="number" value="0">
+              </div>
+            </div>
+            <div style="display:flex; gap:1rem; margin-top:1rem;">
+              <button type="submit" class="nb-btn primary">Add Member</button>
+              <button type="button" class="nb-btn ghost" id="qm-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Interface</th>
+                <th>Penalty</th>
+                <th>Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="qm-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = window.location.origin
+      .replace(':8080', ':5000')
+      .replace(':80', ':5000');
+  </script>
+  <script type="module" src="./js/app.js?v=2"></script>
+  <script type="module">
+    import { api, get, post, put, del } from "./js/api.js";
+
+    const form = document.getElementById("q-form");
+    const alertEl = document.getElementById("q-alert");
+    const tbody = document.getElementById("q-table-body");
+    const countEl = document.getElementById("q-count");
+    const openAdd = document.getElementById("open-add-q");
+    const cancelBtn = document.getElementById("q-cancel");
+    let editingId = null;
+
+    // Members sub-state
+    const membersSection = document.getElementById("members-section");
+    const qmForm = document.getElementById("qm-form");
+    const qmTbody = document.getElementById("qm-table-body");
+    const qmQueueName = document.getElementById("qm-queue-name");
+    let currentQueueId = null;
+
+    async function loadQueues() {
+      const data = await get("/queues");
+      tbody.innerHTML = "";
+      countEl.textContent = data.length;
+      data.forEach((q) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${q.name}</strong></td>
+          <td>${q.number}</td>
+          <td>${q.strategy}</td>
+          <td>${q.member_count}</td>
+          <td>${q.timeout}s</td>
+          <td>${q.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
+          <td class="actions">
+            <button class="nb-btn small" onclick="app.editQ(${q.id})">Edit</button>
+            <button class="nb-btn small" onclick="app.openMembers(${q.id}, '${q.name}')">Members</button>
+            <button class="nb-btn small danger" onclick="app.deleteQ(${q.id})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showAlert(msg) {
+      alertEl.textContent = msg;
+      alertEl.style.display = "block";
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById("q-name").value,
+        number: document.getElementById("q-number").value,
+        strategy: document.getElementById("q-strategy").value,
+        wrapup_time: parseInt(document.getElementById("q-wrapup").value) || 0,
+        max_len: parseInt(document.getElementById("q-maxlen").value) || 0,
+        timeout: parseInt(document.getElementById("q-timeout").value) || 60,
+        is_active: true,
+      };
+      try {
+        if (editingId) {
+          await put(`/queues/${editingId}`, payload);
+        } else {
+          await post("/queues", payload);
+        }
+        form.reset();
+        document.getElementById("q-strategy").value = "ringall";
+        document.getElementById("q-timeout").value = 60;
+        document.getElementById("q-wrapup").value = 0;
+        document.getElementById("q-maxlen").value = 0;
+        editingId = null;
+        document.getElementById("q-id").value = "";
+        cancelBtn.style.display = "none";
+        await loadQueues();
+      } catch (err) {
+        showAlert(err.message || "Failed to save queue");
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      form.reset();
+      document.getElementById("q-strategy").value = "ringall";
+      document.getElementById("q-timeout").value = 60;
+      document.getElementById("q-wrapup").value = 0;
+      document.getElementById("q-maxlen").value = 0;
+      editingId = null;
+      document.getElementById("q-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    openAdd.addEventListener("click", () => {
+      form.reset();
+      document.getElementById("q-strategy").value = "ringall";
+      document.getElementById("q-timeout").value = 60;
+      document.getElementById("q-wrapup").value = 0;
+      document.getElementById("q-maxlen").value = 0;
+      editingId = null;
+      document.getElementById("q-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    // Members
+    async function loadMembers(qId) {
+      const data = await get(`/queues/${qId}/members`);
+      qmTbody.innerHTML = "";
+      data.forEach((m) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${m.interface}</strong></td>
+          <td>${m.penalty}</td>
+          <td>${m.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
+          <td class="actions">
+            <button class="nb-btn small danger" onclick="app.removeMember(${qId}, ${m.id})">Remove</button>
+          </td>
+        `;
+        qmTbody.appendChild(tr);
+      });
+    }
+
+    qmForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!currentQueueId) return;
+      const payload = {
+        interface: document.getElementById("qm-interface").value,
+        penalty: parseInt(document.getElementById("qm-penalty").value) || 0,
+        is_active: true,
+      };
+      try {
+        await post(`/queues/${currentQueueId}/members`, payload);
+        qmForm.reset();
+        document.getElementById("qm-penalty").value = 0;
+        await loadMembers(currentQueueId);
+      } catch (err) {
+        alert(err.message || "Failed to add member");
+      }
+    });
+
+    window.app = {
+      editQ: async (id) => {
+        const data = await get("/queues");
+        const q = data.find((x) => x.id === id);
+        if (!q) return;
+        document.getElementById("q-id").value = q.id;
+        document.getElementById("q-name").value = q.name;
+        document.getElementById("q-number").value = q.number;
+        document.getElementById("q-strategy").value = q.strategy;
+        document.getElementById("q-timeout").value = q.timeout;
+        document.getElementById("q-wrapup").value = q.wrapup_time;
+        document.getElementById("q-maxlen").value = q.max_len;
+        editingId = q.id;
+        cancelBtn.style.display = "inline-block";
+      },
+      deleteQ: async (id) => {
+        if (!confirm("Delete this queue?")) return;
+        await del(`/queues/${id}`);
+        await loadQueues();
+      },
+      openMembers: async (qId, name) => {
+        currentQueueId = qId;
+        qmQueueName.textContent = name;
+        document.getElementById("qm-queue-id").value = qId;
+        membersSection.style.display = "block";
+        await loadMembers(qId);
+      },
+      removeMember: async (qId, mId) => {
+        if (!confirm("Remove this member?")) return;
+        await del(`/queues/${qId}/members/${mId}`);
+        await loadMembers(qId);
+      },
+    };
+
+    loadQueues();
+  </script>
+</body>
+</html>

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voicemail — Asterisk Management Appliance</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <h2>Asterisk<br>Appliance</h2>
+        <p>Management Dashboard</p>
+      </div>
+      <ul class="sidebar-nav">
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="extensions.html">Extensions</a></li>
+        <li><a href="users.html">Users</a></li>
+        <li><a href="dialplan.html">Dialplan</a></li>
+        <li><a href="voicemail.html" class="active">Voicemail</a></li>
+        <li><a href="queues.html">Queues</a></li>
+        <li><a href="ivr.html">IVR</a></li>
+        <li><a href="cdr.html">CDR</a></li>
+      </ul>
+      <div class="sidebar-footer">
+        <span data-user></span><br>
+        <span data-user-role></span>
+      </div>
+    </aside>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1>Voicemail</h1>
+        </div>
+        <div class="topbar-right">
+          <span class="user-badge"><span data-user></span> <span data-user-role></span></span>
+          <button class="nb-btn ghost small" id="open-add-vm">Add Mailbox</button>
+          <button class="nb-btn ghost small" data-logout>Logout</button>
+        </div>
+      </header>
+
+      <h2 class="page-title">Voicemail Boxes</h2>
+      <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
+        Voicemail configuration read by Asterisk via ODBC realtime voicemail.
+      </p>
+
+      <div id="vm-alert" class="alert error" style="display:none;"></div>
+
+      <div class="form-card nb-card" style="padding:1.5rem; max-width:600px; margin-bottom:2rem;">
+        <h3 style="margin-top:0; text-transform:uppercase; font-size:1rem;">Add / Edit Mailbox</h3>
+        <form id="vm-form" novalidate>
+          <input type="hidden" id="vm-id">
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Mailbox</label>
+              <input class="nb-input" id="vm-mailbox" name="mailbox" placeholder="e.g. 1001" required>
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Password</label>
+              <input class="nb-input" id="vm-password" name="password" placeholder="••••" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="nb-form-group">
+              <label class="nb-label">Full Name</label>
+              <input class="nb-input" id="vm-name" name="full_name" placeholder="John Doe">
+            </div>
+            <div class="nb-form-group">
+              <label class="nb-label">Email</label>
+              <input class="nb-input" id="vm-email" name="email" type="email" placeholder="john@example.com">
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; align-items:center; margin-top:1rem;">
+            <label style="font-weight:800; font-size:0.85rem; text-transform:uppercase;">
+              <input type="checkbox" id="vm-attach"> Attach audio to email
+            </label>
+          </div>
+          <div style="display:flex; gap:1rem; margin-top:1rem;">
+            <button type="submit" class="nb-btn primary">Save Mailbox</button>
+            <button type="button" class="nb-btn ghost" id="vm-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
+          <span>All Mailboxes</span>
+          <span class="nb-badge" id="vm-count">0</span>
+        </div>
+        <div class="nb-card" style="overflow:auto;">
+          <table class="nb-table">
+            <thead>
+              <tr>
+                <th>Mailbox</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Attach</th>
+                <th>Active</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="vm-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = window.location.origin
+      .replace(':8080', ':5000')
+      .replace(':80', ':5000');
+  </script>
+  <script type="module" src="./js/app.js?v=2"></script>
+  <script type="module">
+    import { api, get, post, put, del } from "./js/api.js";
+
+    const form = document.getElementById("vm-form");
+    const alertEl = document.getElementById("vm-alert");
+    const tbody = document.getElementById("vm-table-body");
+    const countEl = document.getElementById("vm-count");
+    const openAdd = document.getElementById("open-add-vm");
+    const cancelBtn = document.getElementById("vm-cancel");
+    let editingId = null;
+
+    async function load() {
+      const data = await get("/voicemail");
+      tbody.innerHTML = "";
+      countEl.textContent = data.length;
+      data.forEach((v) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${v.mailbox}</strong></td>
+          <td>${v.full_name || "—"}</td>
+          <td>${v.email || "—"}</td>
+          <td>${v.attach ? '<span class="nb-badge success small">yes</span>' : '<span class="nb-badge dark small">no</span>'}</td>
+          <td>${v.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
+          <td class="actions">
+            <button class="nb-btn small" onclick="app.editVm(${v.id})">Edit</button>
+            <button class="nb-btn small danger" onclick="app.deleteVm(${v.id})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showAlert(msg) {
+      alertEl.textContent = msg;
+      alertEl.style.display = "block";
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        mailbox: document.getElementById("vm-mailbox").value,
+        password: document.getElementById("vm-password").value,
+        full_name: document.getElementById("vm-name").value,
+        email: document.getElementById("vm-email").value,
+        attach: document.getElementById("vm-attach").checked,
+        delete_msg: false,
+        is_active: true,
+      };
+      try {
+        if (editingId) {
+          await put(`/voicemail/${editingId}`, payload);
+        } else {
+          await post("/voicemail", payload);
+        }
+        form.reset();
+        editingId = null;
+        document.getElementById("vm-id").value = "";
+        cancelBtn.style.display = "none";
+        await load();
+      } catch (err) {
+        showAlert(err.message || "Failed to save mailbox");
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      form.reset();
+      editingId = null;
+      document.getElementById("vm-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    openAdd.addEventListener("click", () => {
+      form.reset();
+      editingId = null;
+      document.getElementById("vm-id").value = "";
+      cancelBtn.style.display = "none";
+    });
+
+    window.app = {
+      editVm: async (id) => {
+        const data = await get("/voicemail");
+        const v = data.find((x) => x.id === id);
+        if (!v) return;
+        document.getElementById("vm-id").value = v.id;
+        document.getElementById("vm-mailbox").value = v.mailbox;
+        document.getElementById("vm-password").value = v.password || "";
+        document.getElementById("vm-name").value = v.full_name || "";
+        document.getElementById("vm-email").value = v.email || "";
+        document.getElementById("vm-attach").checked = v.attach;
+        editingId = v.id;
+        cancelBtn.style.display = "inline-block";
+      },
+      deleteVm: async (id) => {
+        if (!confirm("Delete this mailbox?")) return;
+        await del(`/voicemail/${id}`);
+        await load();
+      },
+    };
+
+    load();
+  </script>
+</body>
+</html>
