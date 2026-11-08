@@ -68,6 +68,16 @@
 
       <div class="section">
         <div class="section-title">
+          <span>Backend Connection</span>
+          <span class="nb-badge info" id="api-status">checking…</span>
+        </div>
+        <div class="nb-card" style="padding:1.5rem;">
+          <p id="api-msg">Testing connection to backend…</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">
           <span>Asterisk Status</span>
           <span class="nb-badge info" id="asterisk-status">placeholder</span>
         </div>
@@ -112,6 +122,27 @@
       }
     }
 
+    async function testApiConnection() {
+      try {
+        const result = await api.testConnection();
+        const el = document.getElementById("api-status");
+        const msg = document.getElementById("api-msg");
+        if (result.ok) {
+          el.textContent = "ONLINE";
+          el.className = "nb-badge success";
+          msg.textContent = "Backend API is reachable on port 5000.";
+        } else {
+          el.textContent = "OFFLINE";
+          el.className = "nb-badge danger";
+          msg.textContent = "Cannot reach backend: " + result.error;
+        }
+      } catch (e) {
+        document.getElementById("api-status").textContent = "ERROR";
+        document.getElementById("api-status").className = "nb-badge danger";
+        document.getElementById("api-msg").textContent = e.message;
+      }
+    }
+
     async function loadAsterisk() {
       try {
         const data = await api("/monitoring/asterisk");
@@ -125,6 +156,7 @@
     }
 
     loadStats();
+    testApiConnection();
     loadAsterisk();
   </script>
 </body>

@@ -1,7 +1,7 @@
 /* ── App shell: navigation, auth state, logout ── */
-import { api, clearSession, getUser, isAuthenticated } from "./api.js";
+import { api, clearSession, getUser, isAuthenticated, testConnection } from "./api.js";
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const user = getUser();
   const isAuth = isAuthenticated();
 
@@ -20,6 +20,20 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isAuth && isLogin) {
     window.location.href = "dashboard.html";
     return;
+  }
+
+  // Connection check (non-blocking)
+  try {
+    const conn = await testConnection();
+    if (!conn.ok) {
+      const alertDiv = document.createElement("div");
+      alertDiv.className = "alert error";
+      alertDiv.innerHTML = "<strong>Backend not reachable:</strong> " + conn.error +
+        "<br>Make sure the backend container is running on port 5000 and you opened the UI via http://localhost:8080";
+      document.body.insertBefore(alertDiv, document.body.firstChild);
+    }
+  } catch (_) {
+    // ignore — testConnection already catches
   }
 
   renderUser(user);
