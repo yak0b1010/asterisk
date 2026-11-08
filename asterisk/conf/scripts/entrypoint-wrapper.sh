@@ -34,7 +34,7 @@ if [ -f /etc/asterisk/http.conf ]; then
   if [ -n "${WSS_PORT:-}" ]; then
     sed -i "s/^tlsbindaddr[[:space:]]*=.*/tlsbindaddr = 0.0.0.0:${WSS_PORT}/" /etc/asterisk/http.conf
   fi
-  log "http.conf: bindport=${HTTP_PORT:-8088} tlsbindaddr=0.0.0.0:${WSS_PORT:-8089}"
+  log "http.conf: bindport=${HTTP_PORT:-} tlsbindaddr=0.0.0.0:${WSS_PORT:-}"
 fi
 
 # ---- AMI -----------------------------------------------------------------
@@ -76,34 +76,34 @@ else
 fi
 
 # ---- PostgreSQL realtime over ODBC (realtime mode only) ------------------
-if [ "${MODE}" = "realtime" ]; then
+if [ "${MODE:-}" = "realtime" ]; then
     if [ -n "${DB_PASSWORD:-}" ]; then
-      for v in DB_HOST DB_NAME DB_USER DB_PASSWORD; do
+      for v in DB_HOST DB_NAME DB_USER DB_PORT DB_PASSWORD; do
         if [ -z "${!v:-}" ]; then
           log "realtime mode but $v unset - ODBC will not connect"
-          exit 1   # or skip ODBC rendering and continue standalone-only
+          exit 1
         fi
       done
     cat >/etc/odbc.ini <<EOF
 [asterisk-pgsql]
 Description = Asterisk realtime datasource
 Driver      = PostgreSQL Unicode
-Servername  = ${DB_HOST}
-Port        = ${DB_PORT}
-Database    = ${DB_NAME}
+Servername  = ${DB_HOST:-}
+Port        = ${DB_PORT:-}
+Database    = ${DB_NAME:-}
 EOF
 
     cat >/etc/asterisk/res_odbc.conf <<EOF
 [asterisk]
 enabled         => yes
 dsn             => asterisk-pgsql
-username        => ${DB_USER}
-password        => ${DB_PASSWORD}
+username        => ${DB_USER:-}
+password        => ${DB_PASSWORD:-}
 pre-connect     => yes
 max_connections => 5
 sanitysql       => select 1
 EOF
-    log "rendered odbc.ini + res_odbc.conf (host=\"${DB_HOST}\" db=\"${DB_NAME}\")"
+    log "rendered odbc.ini + res_odbc.conf (host=\"${DB_HOST:-}\" db=\"${DB_NAME:-}\")"
   else
     log "realtime mode but DB_PASSWORD unset - ODBC will not connect"
   fi
