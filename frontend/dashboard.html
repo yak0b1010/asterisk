@@ -106,9 +106,9 @@
       .replace(':8080', ':5000')
       .replace(':80', ':5000');
   </script>
-  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api } from "./js/api.js";
+    import { api, testConnection } from "./js/api.js?v=2";
 
     async function loadStats() {
       try {
@@ -124,7 +124,7 @@
 
     async function testApiConnection() {
       try {
-        const result = await api.testConnection();
+        const result = await testConnection();
         const el = document.getElementById("api-status");
         const msg = document.getElementById("api-msg");
         if (result.ok) {
