@@ -1,44 +1,63 @@
 #!/bin/sh
 # Host firewall management for the Asterisk appliance.
 #
-#   FIREWALL_ENABLED=yes|no
-#   FIREWALL_MODE=permanent|runtime
-#
-# permanent: firewalld policy (ingress ANY, egress HOST). Zone-independent;
-#            survives reboot; evaluated before zone reject rules. Policies are
-#            permanent-only in firewalld, hence --permanent + --reload.
-# runtime:   ports added to every active zone; lost on reload/reboot.
+# FIREWALL_ENABLED - yes | no. "no" leaves the host firewall untouched.
+# FIREWALL_MODE    - permanent | runtime.
+#   permanent - firewalld policy with ingress ANY and egress HOST. The policy
+#               survives reboot and is evaluated before zone reject rules.
+#   runtime   - ports are added to every active zone and are lost on reload.
 #
 # Usage: firewall.sh on|off|status
 
 set -eu
 
-POLICY="${FIREWALL_POLICY:-asterisk-appliance}"
-MODE="${FIREWALL_MODE:-runtime}"
-ENABLED="${FIREWALL_ENABLED:-yes}"
-
-log() { printf '[firewall] %s\n' "$*"; }
+log()  { printf '[firewall] %s\n' "$*"; }
 warn() { printf '[firewall] warning: %s\n' "$*" >&2; }
-die() {
-  printf '[firewall] error: %s\n' "$*" >&2
-  exit 1
-}
+die()  { printf '[firewall] error: %s\n' "$*" >&2; exit 1; }
 
-case "$MODE" in
-permanent | runtime) ;;
-*) die "FIREWALL_MODE must be 'permanent' or 'runtime' (got '$MODE')" ;;
+# ---- Required environment ------------------------------------------------
+# FIREWALL_POLICY - firewalld policy name used in permanent mode.
+# FIREWALL_MODE - permanent | runtime.
+# FIREWALL_ENABLED - yes | no.
+: "${FIREWALL_POLICY:?FIREWALL_POLICY is required}"
+: "${FIREWALL_MODE:?FIREWALL_MODE is required (permanent|runtime)}"
+: "${FIREWALL_ENABLED:?FIREWALL_ENABLED is required (yes|no)}"
+
+case "${FIREWALL_MODE}" in
+  permanent | runtime) ;;
+  *) die "FIREWALL_MODE must be 'permanent' or 'runtime' (got '${FIREWALL_MODE}')" ;;
 esac
+
+case "${FIREWALL_ENABLED}" in
+  yes | no) ;;
+  *) die "FIREWALL_ENABLED must be 'yes' or 'no' (got '${FIREWALL_ENABLED}')" ;;
+esac
+
+# SIP_PORT - PJSIP signalling port, opened as UDP.
+# RTP_RANGE - RTP media port range in "start-end" form, opened as UDP.
+# HTTP_PORT - Asterisk HTTP port, opened as TCP.
+# WSS_PORT - TLS/WSS port, opened as TCP.
+# DASHBOARD_PORT - frontend dashboard port, opened as TCP.
+: "${SIP_PORT:?SIP_PORT is required}"
+: "${RTP_RANGE:?RTP_RANGE is required (start-end)}"
+: "${HTTP_PORT:?HTTP_PORT is required}"
+: "${WSS_PORT:?WSS_PORT is required}"
+: "${DASHBOARD_PORT:?DASHBOARD_PORT is required}"
+
+case "${RTP_RANGE}" in
+  *-*) ;;
+  *) die "RTP_RANGE must be in form of start-end (got '${RTP_RANGE}')" ;;
+esac
+
+POLICY="${FIREWALL_POLICY}"
+MODE="${FIREWALL_MODE}"
+ENABLED="${FIREWALL_ENABLED}"
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "root or sudo is required to change firewalld"
   SUDO="sudo"
 fi
-
-case "${RTP_RANGE:-}" in
-*-*) ;;
-*) die "RTP_RANGE must be start-end (got '${RTP_RANGE:-}')" ;;
-esac
 
 PORTS=""
 add_port() {
@@ -50,11 +69,11 @@ add_port() {
     fi
   fi
 }
-add_port "${SIP_PORT:-}/udp"
-add_port "${RTP_RANGE:-}/udp"
-add_port "${HTTP_PORT:-}/tcp"
-add_port "${WSS_PORT:-}/tcp"
-add_port "${DASHBOARD_PORT:-}/tcp"
+add_port "${SIP_PORT}/udp"
+add_port "${RTP_RANGE}/udp"
+add_port "${HTTP_PORT}/tcp"
+add_port "${WSS_PORT}/tcp"
+add_port "${DASHBOARD_PORT}/tcp"
 
 firewalld_running() {
   [ "$(firewall-cmd --state 2>/dev/null || true)" = "running" ]
@@ -247,7 +266,12 @@ do_status() {
   done
 }
 
-case "${1:-}" in
+if [ "$#" -lt 1 ]; then
+  echo "usage: $0 on|off|status" >&2
+  exit 2
+fi
+
+case "$1" in
 on)
   require_enabled
   require_firewalld
