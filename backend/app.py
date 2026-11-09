@@ -17,24 +17,26 @@ Endpoints:
   Audit:      /api/audit
 """
 
-import os
 import csv
 import io
+import os
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import bcrypt
 import jwt
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
 import psycopg2
+from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
 from psycopg2.extras import RealDictCursor
+
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 def get_env(name, default=None):
     return os.environ.get(name, default)
+
 
 DB_CONFIG = {
     "host": get_env("DB_HOST", "localhost"),
@@ -56,6 +58,7 @@ ADMIN_ROLE = "admin"
 # ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder=None)
 CORS(app, origins=CORS_ORIGINS, supports_credentials=True)
+
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -115,7 +118,7 @@ def verify_password(password, hash_value):
 
 def make_token(user):
     payload = {
-        "sub": str(user["id"]),   # PyJWT requires sub to be a string
+        "sub": str(user["id"]),  # PyJWT requires sub to be a string
         "username": user["username"],
         "role": user["role"],
         "exp": datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES),
@@ -149,15 +152,20 @@ def auth_required(f):
             "role": payload["role"],
         }
         return f(*args, **kwargs)
+
     return decorated
 
 
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if getattr(request, "current_user", None) is None or request.current_user["role"] != ADMIN_ROLE:
+        if (
+            getattr(request, "current_user", None) is None
+            or request.current_user["role"] != ADMIN_ROLE
+        ):
             return jsonify({"error": "admin access required"}), 403
         return f(*args, **kwargs)
+
     return decorated
 
 
@@ -173,8 +181,15 @@ def audit(action, table_name=None, record_id=None, details=None):
                 INSERT INTO audit_log (user_id, action, table_name, record_id, details, ip, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (user["id"] if user else None, action, table_name, record_id,
-                 details, ip, datetime.now(timezone.utc)),
+                (
+                    user["id"] if user else None,
+                    action,
+                    table_name,
+                    record_id,
+                    details,
+                    ip,
+                    datetime.now(timezone.utc),
+                ),
             )
             conn.commit()
         conn.close()
@@ -193,15 +208,24 @@ def login():
     if not username or not password:
         return jsonify({"error": "username and password required"}), 400
 
-    rows = query("SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,))
+    rows = query(
+        "SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,)
+    )
     user = rows[0] if rows else None
     if not user or not verify_password(password, user["password_hash"]):
         return jsonify({"error": "invalid credentials"}), 401
 
-    return jsonify({"token": make_token(user), "user": {
-        "id": user["id"], "username": user["username"],
-        "email": user["email"], "role": user["role"],
-    }})
+    return jsonify(
+        {
+            "token": make_token(user),
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "role": user["role"],
+            },
+        }
+    )
 
 
 @app.route("/api/auth/register", methods=["POST"])
@@ -234,8 +258,10 @@ def register():
 @app.route("/api/auth/me", methods=["GET"])
 @auth_required
 def me():
-    rows = query("SELECT id, username, email, role, is_active FROM users WHERE id = %s",
-                 (request.current_user["id"],))
+    rows = query(
+        "SELECT id, username, email, role, is_active FROM users WHERE id = %s",
+        (request.current_user["id"],),
+    )
     user = rows[0] if rows else None
     if not user:
         return jsonify({"error": "user not found"}), 404
@@ -260,7 +286,9 @@ def dashboard_stats():
         rows = query(f"SELECT COUNT(*) AS c FROM {table}")
         return int(rows[0]["c"])
 
-    ext_active = query("SELECT COUNT(*) AS c FROM extensions WHERE is_active = TRUE")[0]["c"]
+    ext_active = query("SELECT COUNT(*) AS c FROM extensions WHERE is_active = TRUE")[
+        0
+    ]["c"]
     ext_total = count("extensions")
     users_total = count("users")
     queues_total = count("queues")
@@ -274,32 +302,36 @@ def dashboard_stats():
         "SELECT COUNT(*) AS c FROM cdr WHERE disposition = 'ANSWERED' AND calldate > NOW() - INTERVAL '1 hour'"
     )[0]["c"]
 
-    return jsonify({
-        "extensions_total": int(ext_total),
-        "extensions_active": int(ext_active),
-        "users_total": int(users_total),
-        "queues_total": int(queues_total),
-        "ivr_menus_total": int(ivr_total),
-        "cdr_today": int(cdr_today),
-        "active_calls": int(active_calls),
-        "system_status": "operational",
-        "generated_at": now_iso(),
-    })
+    return jsonify(
+        {
+            "extensions_total": int(ext_total),
+            "extensions_active": int(ext_active),
+            "users_total": int(users_total),
+            "queues_total": int(queues_total),
+            "ivr_menus_total": int(ivr_total),
+            "cdr_today": int(cdr_today),
+            "active_calls": int(active_calls),
+            "system_status": "operational",
+            "generated_at": now_iso(),
+        }
+    )
 
 
 @app.route("/api/monitoring/asterisk", methods=["GET"])
 @auth_required
 def monitoring_asterisk():
     """Placeholder endpoint for the Asterisk developer to populate with AMI/ARI data."""
-    return jsonify({
-        "status": "unknown",
-        "version": "placeholder",
-        "registered_phones": 0,
-        "active_calls": 0,
-        "channels": 0,
-        "message": "Asterisk AMI/ARI integration is owned by the Asterisk developer. "
-                   "This endpoint returns placeholder data until wired.",
-    })
+    return jsonify(
+        {
+            "status": "unknown",
+            "version": "placeholder",
+            "registered_phones": 0,
+            "active_calls": 0,
+            "channels": 0,
+            "message": "Asterisk AMI/ARI integration is owned by the Asterisk developer. "
+            "This endpoint returns placeholder data until wired.",
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -324,8 +356,14 @@ def paginate(table, order_by="id DESC"):
 @auth_required
 def list_extensions():
     rows, total, page, per_page = paginate("extensions")
-    return jsonify({"items": [dict(r) for r in rows], "total": total,
-                    "page": page, "per_page": per_page})
+    return jsonify(
+        {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+    )
 
 
 @app.route("/api/extensions", methods=["POST"])
@@ -345,15 +383,27 @@ def create_extension():
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
             """,
-            (data["extension"], data["name"], data["secret"],
-             data.get("context", "from-internal"), data.get("technology", "PJSIP"),
-             bool(data.get("voicemail_enabled", False)),
-             data.get("voicemail_password"), data.get("email"),
-             bool(data.get("is_active", True))),
+            (
+                data["extension"],
+                data["name"],
+                data["secret"],
+                data.get("context", "from-internal"),
+                data.get("technology", "PJSIP"),
+                bool(data.get("voicemail_enabled", False)),
+                data.get("voicemail_password"),
+                data.get("email"),
+                bool(data.get("is_active", True)),
+            ),
         )
-        audit("create_extension", "extensions", row["id"] if row else None,
-             f"extension {data['extension']}")
-        return jsonify({"message": "extension created", "id": row["id"] if row else None}), 201
+        audit(
+            "create_extension",
+            "extensions",
+            row["id"] if row else None,
+            f"extension {data['extension']}",
+        )
+        return jsonify(
+            {"message": "extension created", "id": row["id"] if row else None}
+        ), 201
     except psycopg2.IntegrityError:
         return jsonify({"error": "extension already exists"}), 409
 
@@ -365,8 +415,17 @@ def update_extension(ext_id):
     data = request.get_json(silent=True) or {}
     fields = []
     params = []
-    for col in ["extension", "name", "secret", "context", "technology",
-                "voicemail_enabled", "voicemail_password", "email", "is_active"]:
+    for col in [
+        "extension",
+        "name",
+        "secret",
+        "context",
+        "technology",
+        "voicemail_enabled",
+        "voicemail_password",
+        "email",
+        "is_active",
+    ]:
         if col in data:
             fields.append(f"{col} = %s")
             params.append(data[col])
@@ -398,7 +457,9 @@ def delete_extension(ext_id):
 @app.route("/api/users", methods=["GET"])
 @auth_required
 def list_users():
-    rows = query("SELECT id, username, email, role, is_active, created_at FROM users ORDER BY id DESC")
+    rows = query(
+        "SELECT id, username, email, role, is_active, created_at FROM users ORDER BY id DESC"
+    )
     return jsonify([dict(r) for r in rows])
 
 
@@ -426,8 +487,12 @@ def update_user(user_id):
     if not fields:
         return jsonify({"error": "no fields to update"}), 400
     params.append(user_id)
-    query(f"UPDATE users SET {', '.join(fields)} WHERE id = %s", tuple(params),
-          fetch=False, commit=True)
+    query(
+        f"UPDATE users SET {', '.join(fields)} WHERE id = %s",
+        tuple(params),
+        fetch=False,
+        commit=True,
+    )
     audit("update_user", "users", user_id, str(data))
     return jsonify({"message": "user updated"})
 
@@ -466,13 +531,25 @@ def create_dialplan():
         INSERT INTO dialplan (pattern, context, destination, priority, application, description, is_active)
         VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """,
-        (data["pattern"], data.get("context", "from-internal"), data["destination"],
-         int(data.get("priority", 1)), data.get("application", "Dial"),
-         data.get("description"), bool(data.get("is_active", True))),
+        (
+            data["pattern"],
+            data.get("context", "from-internal"),
+            data["destination"],
+            int(data.get("priority", 1)),
+            data.get("application", "Dial"),
+            data.get("description"),
+            bool(data.get("is_active", True)),
+        ),
     )
-    audit("create_dialplan", "dialplan", row["id"] if row else None,
-         f"pattern {data['pattern']}")
-    return jsonify({"message": "dialplan entry created", "id": row["id"] if row else None}), 201
+    audit(
+        "create_dialplan",
+        "dialplan",
+        row["id"] if row else None,
+        f"pattern {data['pattern']}",
+    )
+    return jsonify(
+        {"message": "dialplan entry created", "id": row["id"] if row else None}
+    ), 201
 
 
 @app.route("/api/dialplan/<int:dp_id>", methods=["PUT"])
@@ -482,7 +559,15 @@ def update_dialplan(dp_id):
     data = request.get_json(silent=True) or {}
     fields = []
     params = []
-    for col in ["pattern", "context", "destination", "priority", "application", "description", "is_active"]:
+    for col in [
+        "pattern",
+        "context",
+        "destination",
+        "priority",
+        "application",
+        "description",
+        "is_active",
+    ]:
         if col in data:
             fields.append(f"{col} = %s")
             params.append(data[col])
@@ -490,8 +575,12 @@ def update_dialplan(dp_id):
         return jsonify({"error": "no fields to update"}), 400
     fields.append("updated_at = NOW()")
     params.append(dp_id)
-    query(f"UPDATE dialplan SET {', '.join(fields)} WHERE id = %s", tuple(params),
-          fetch=False, commit=True)
+    query(
+        f"UPDATE dialplan SET {', '.join(fields)} WHERE id = %s",
+        tuple(params),
+        fetch=False,
+        commit=True,
+    )
     audit("update_dialplan", "dialplan", dp_id, str(data))
     return jsonify({"message": "dialplan entry updated"})
 
@@ -529,13 +618,25 @@ def create_voicemail():
             INSERT INTO voicemail (mailbox, password, full_name, email, attach, delete_msg, is_active)
             VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """,
-            (data["mailbox"], data["password"], data.get("full_name"),
-             data.get("email"), bool(data.get("attach", False)),
-             bool(data.get("delete_msg", False)), bool(data.get("is_active", True))),
+            (
+                data["mailbox"],
+                data["password"],
+                data.get("full_name"),
+                data.get("email"),
+                bool(data.get("attach", False)),
+                bool(data.get("delete_msg", False)),
+                bool(data.get("is_active", True)),
+            ),
         )
-        audit("create_voicemail", "voicemail", row["id"] if row else None,
-             f"mailbox {data['mailbox']}")
-        return jsonify({"message": "voicemail created", "id": row["id"] if row else None}), 201
+        audit(
+            "create_voicemail",
+            "voicemail",
+            row["id"] if row else None,
+            f"mailbox {data['mailbox']}",
+        )
+        return jsonify(
+            {"message": "voicemail created", "id": row["id"] if row else None}
+        ), 201
     except psycopg2.IntegrityError:
         return jsonify({"error": "mailbox already exists"}), 409
 
@@ -547,7 +648,15 @@ def update_voicemail(vm_id):
     data = request.get_json(silent=True) or {}
     fields = []
     params = []
-    for col in ["mailbox", "password", "full_name", "email", "attach", "delete_msg", "is_active"]:
+    for col in [
+        "mailbox",
+        "password",
+        "full_name",
+        "email",
+        "attach",
+        "delete_msg",
+        "is_active",
+    ]:
         if col in data:
             fields.append(f"{col} = %s")
             params.append(data[col])
@@ -556,8 +665,12 @@ def update_voicemail(vm_id):
     fields.append("updated_at = NOW()")
     params.append(vm_id)
     try:
-        query(f"UPDATE voicemail SET {', '.join(fields)} WHERE id = %s", tuple(params),
-              fetch=False, commit=True)
+        query(
+            f"UPDATE voicemail SET {', '.join(fields)} WHERE id = %s",
+            tuple(params),
+            fetch=False,
+            commit=True,
+        )
         audit("update_voicemail", "voicemail", vm_id, str(data))
         return jsonify({"message": "voicemail updated"})
     except psycopg2.IntegrityError:
@@ -602,13 +715,25 @@ def create_queue():
             INSERT INTO queues (name, number, strategy, wrapup_time, max_len, timeout, is_active)
             VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id
             """,
-            (data["name"], data["number"], data.get("strategy", "ringall"),
-             int(data.get("wrapup_time", 0)), int(data.get("max_len", 0)),
-             int(data.get("timeout", 60)), bool(data.get("is_active", True))),
+            (
+                data["name"],
+                data["number"],
+                data.get("strategy", "ringall"),
+                int(data.get("wrapup_time", 0)),
+                int(data.get("max_len", 0)),
+                int(data.get("timeout", 60)),
+                bool(data.get("is_active", True)),
+            ),
         )
-        audit("create_queue", "queues", row["id"] if row else None,
-             f"queue {data['name']}")
-        return jsonify({"message": "queue created", "id": row["id"] if row else None}), 201
+        audit(
+            "create_queue",
+            "queues",
+            row["id"] if row else None,
+            f"queue {data['name']}",
+        )
+        return jsonify(
+            {"message": "queue created", "id": row["id"] if row else None}
+        ), 201
     except psycopg2.IntegrityError:
         return jsonify({"error": "queue number already exists"}), 409
 
@@ -620,7 +745,15 @@ def update_queue(q_id):
     data = request.get_json(silent=True) or {}
     fields = []
     params = []
-    for col in ["name", "number", "strategy", "wrapup_time", "max_len", "timeout", "is_active"]:
+    for col in [
+        "name",
+        "number",
+        "strategy",
+        "wrapup_time",
+        "max_len",
+        "timeout",
+        "is_active",
+    ]:
         if col in data:
             fields.append(f"{col} = %s")
             params.append(data[col])
@@ -629,8 +762,12 @@ def update_queue(q_id):
     fields.append("updated_at = NOW()")
     params.append(q_id)
     try:
-        query(f"UPDATE queues SET {', '.join(fields)} WHERE id = %s", tuple(params),
-              fetch=False, commit=True)
+        query(
+            f"UPDATE queues SET {', '.join(fields)} WHERE id = %s",
+            tuple(params),
+            fetch=False,
+            commit=True,
+        )
         audit("update_queue", "queues", q_id, str(data))
         return jsonify({"message": "queue updated"})
     except psycopg2.IntegrityError:
@@ -649,7 +786,9 @@ def delete_queue(q_id):
 @app.route("/api/queues/<int:q_id>/members", methods=["GET"])
 @auth_required
 def list_queue_members(q_id):
-    rows = query("SELECT * FROM queue_members WHERE queue_id = %s ORDER BY id DESC", (q_id,))
+    rows = query(
+        "SELECT * FROM queue_members WHERE queue_id = %s ORDER BY id DESC", (q_id,)
+    )
     return jsonify([dict(r) for r in rows])
 
 
@@ -662,11 +801,21 @@ def add_queue_member(q_id):
         return jsonify({"error": "interface is required"}), 400
     query(
         "INSERT INTO queue_members (queue_id, interface, penalty, is_active) VALUES (%s,%s,%s,%s)",
-        (q_id, data["interface"], int(data.get("penalty", 0)),
-         bool(data.get("is_active", True))),
-        fetch=False, commit=True,
+        (
+            q_id,
+            data["interface"],
+            int(data.get("penalty", 0)),
+            bool(data.get("is_active", True)),
+        ),
+        fetch=False,
+        commit=True,
     )
-    audit("add_queue_member", "queue_members", None, f"queue {q_id} interface {data['interface']}")
+    audit(
+        "add_queue_member",
+        "queue_members",
+        None,
+        f"queue {q_id} interface {data['interface']}",
+    )
     return jsonify({"message": "member added"}), 201
 
 
@@ -674,8 +823,12 @@ def add_queue_member(q_id):
 @auth_required
 @admin_required
 def remove_queue_member(q_id, m_id):
-    query("DELETE FROM queue_members WHERE id = %s AND queue_id = %s", (m_id, q_id),
-          fetch=False, commit=True)
+    query(
+        "DELETE FROM queue_members WHERE id = %s AND queue_id = %s",
+        (m_id, q_id),
+        fetch=False,
+        commit=True,
+    )
     audit("remove_queue_member", "queue_members", m_id, f"queue {q_id}")
     return jsonify({"message": "member removed"})
 
@@ -704,13 +857,21 @@ def create_ivr():
             INSERT INTO ivr_menus (name, extension, prompt_file, timeout, invalid_prompt_file, is_active)
             VALUES (%s,%s,%s,%s,%s,%s) RETURNING id
             """,
-            (data["name"], data["extension"], data.get("prompt_file"),
-             int(data.get("timeout", 5)), data.get("invalid_prompt_file"),
-             bool(data.get("is_active", True))),
+            (
+                data["name"],
+                data["extension"],
+                data.get("prompt_file"),
+                int(data.get("timeout", 5)),
+                data.get("invalid_prompt_file"),
+                bool(data.get("is_active", True)),
+            ),
         )
-        audit("create_ivr", "ivr_menus", row["id"] if row else None,
-             f"ivr {data['name']}")
-        return jsonify({"message": "ivr created", "id": row["id"] if row else None}), 201
+        audit(
+            "create_ivr", "ivr_menus", row["id"] if row else None, f"ivr {data['name']}"
+        )
+        return jsonify(
+            {"message": "ivr created", "id": row["id"] if row else None}
+        ), 201
     except psycopg2.IntegrityError:
         return jsonify({"error": "ivr extension already exists"}), 409
 
@@ -722,7 +883,14 @@ def update_ivr(ivr_id):
     data = request.get_json(silent=True) or {}
     fields = []
     params = []
-    for col in ["name", "extension", "prompt_file", "timeout", "invalid_prompt_file", "is_active"]:
+    for col in [
+        "name",
+        "extension",
+        "prompt_file",
+        "timeout",
+        "invalid_prompt_file",
+        "is_active",
+    ]:
         if col in data:
             fields.append(f"{col} = %s")
             params.append(data[col])
@@ -731,8 +899,12 @@ def update_ivr(ivr_id):
     fields.append("updated_at = NOW()")
     params.append(ivr_id)
     try:
-        query(f"UPDATE ivr_menus SET {', '.join(fields)} WHERE id = %s", tuple(params),
-              fetch=False, commit=True)
+        query(
+            f"UPDATE ivr_menus SET {', '.join(fields)} WHERE id = %s",
+            tuple(params),
+            fetch=False,
+            commit=True,
+        )
         audit("update_ivr", "ivr_menus", ivr_id, str(data))
         return jsonify({"message": "ivr updated"})
     except psycopg2.IntegrityError:
@@ -751,7 +923,9 @@ def delete_ivr(ivr_id):
 @app.route("/api/ivr/<int:ivr_id>/routes", methods=["GET"])
 @auth_required
 def list_ivr_routes(ivr_id):
-    rows = query("SELECT * FROM ivr_routes WHERE ivr_id = %s ORDER BY id DESC", (ivr_id,))
+    rows = query(
+        "SELECT * FROM ivr_routes WHERE ivr_id = %s ORDER BY id DESC", (ivr_id,)
+    )
     return jsonify([dict(r) for r in rows])
 
 
@@ -766,7 +940,8 @@ def add_ivr_route(ivr_id):
     query(
         "INSERT INTO ivr_routes (ivr_id, digit, destination_type, destination) VALUES (%s,%s,%s,%s)",
         (ivr_id, data["digit"], data["destination_type"], data["destination"]),
-        fetch=False, commit=True,
+        fetch=False,
+        commit=True,
     )
     audit("add_ivr_route", "ivr_routes", None, f"ivr {ivr_id} digit {data['digit']}")
     return jsonify({"message": "route added"}), 201
@@ -776,8 +951,12 @@ def add_ivr_route(ivr_id):
 @auth_required
 @admin_required
 def delete_ivr_route(ivr_id, r_id):
-    query("DELETE FROM ivr_routes WHERE id = %s AND ivr_id = %s", (r_id, ivr_id),
-          fetch=False, commit=True)
+    query(
+        "DELETE FROM ivr_routes WHERE id = %s AND ivr_id = %s",
+        (r_id, ivr_id),
+        fetch=False,
+        commit=True,
+    )
     audit("delete_ivr_route", "ivr_routes", r_id, f"ivr {ivr_id}")
     return jsonify({"message": "route deleted"})
 
@@ -801,15 +980,20 @@ def list_cdr():
     date_to = request.args.get("date_to")
 
     if src:
-        conditions.append("src ILIKE %s"); params.append(f"%{src}%")
+        conditions.append("src ILIKE %s")
+        params.append(f"%{src}%")
     if dst:
-        conditions.append("dst ILIKE %s"); params.append(f"%{dst}%")
+        conditions.append("dst ILIKE %s")
+        params.append(f"%{dst}%")
     if disposition:
-        conditions.append("disposition = %s"); params.append(disposition)
+        conditions.append("disposition = %s")
+        params.append(disposition)
     if date_from:
-        conditions.append("calldate::date >= %s"); params.append(date_from)
+        conditions.append("calldate::date >= %s")
+        params.append(date_from)
     if date_to:
-        conditions.append("calldate::date <= %s"); params.append(date_to)
+        conditions.append("calldate::date <= %s")
+        params.append(date_to)
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     rows = query(
@@ -817,8 +1001,14 @@ def list_cdr():
         tuple(params + [per_page, offset]),
     )
     total = query(f"SELECT COUNT(*) AS c FROM cdr {where}", tuple(params))[0]["c"]
-    return jsonify({"items": [dict(r) for r in rows], "total": int(total),
-                    "page": page, "per_page": per_page})
+    return jsonify(
+        {
+            "items": [dict(r) for r in rows],
+            "total": int(total),
+            "page": page,
+            "per_page": per_page,
+        }
+    )
 
 
 @app.route("/api/cdr/export", methods=["GET"])
@@ -832,10 +1022,14 @@ def export_cdr():
         for r in rows:
             writer.writerow(r.values())
     csv_data = output.getvalue()
-    return csv_data, 200, {
-        "Content-Type": "text/csv",
-        "Content-Disposition": 'attachment; filename="cdr_export.csv"',
-    }
+    return (
+        csv_data,
+        200,
+        {
+            "Content-Type": "text/csv",
+            "Content-Disposition": 'attachment; filename="cdr_export.csv"',
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -848,11 +1042,19 @@ def list_audit():
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 50))
     offset = (page - 1) * per_page
-    rows = query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT %s OFFSET %s",
-                 (per_page, offset))
+    rows = query(
+        "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        (per_page, offset),
+    )
     total = query("SELECT COUNT(*) AS c FROM audit_log")[0]["c"]
-    return jsonify({"items": [dict(r) for r in rows], "total": int(total),
-                    "page": page, "per_page": per_page})
+    return jsonify(
+        {
+            "items": [dict(r) for r in rows],
+            "total": int(total),
+            "page": page,
+            "per_page": per_page,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
