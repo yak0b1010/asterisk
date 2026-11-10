@@ -2,22 +2,60 @@ name: asterisk-appliance
 
 services:
   postgres:
-    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    image: postgres:${POSTGRES_VERSION:?POSTGRES_VERSION is required}-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-asterisk}
-      POSTGRES_USER: ${DB_USER:-asterisk}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-asterisk_pass}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DEMO_DATA: ${DEMO_DATA:-no}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-asterisk} -d ${DB_NAME:-asterisk}"]
+      # Init uses a Unix-socket-only temporary server. Wait for the final TCP
+      # server, otherwise Asterisk may cache empty CDR metadata during init.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_USER:?DB_USER is required} -d ${DB_NAME:?DB_NAME is required}"]
       interval: 5s
       timeout: 3s
       retries: 30
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      # Host-network Asterisk connects through loopback; appnet clients use
+      # postgres:5432 directly, independently of POSTGRES_HOST_PORT.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:?POSTGRES_HOST_PORT is required}:5432"
+    networks:
+      - appnet
+
+  asterisk:
+    image: ${ASTERISK_APP_IMAGE:?ASTERISK_APP_IMAGE is required}:${ASTERISK_MODE:?ASTERISK_MODE is required}
+    build:
+      context: ./asterisk
+      args:
+        BASE_IMAGE: ${ASTERISK_IMAGE:?ASTERISK_IMAGE is required}:${ASTERISK_TAG:?ASTERISK_TAG is required}@${ASTERISK_DIGEST:?ASTERISK_DIGEST is required}
+        MODE: ${ASTERISK_MODE:?ASTERISK_MODE is required}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Share the host network so SIP/RTP/HTTP/WSS bind directly, matching
+    # asterisk/Makefile. Port mappings are not used in this mode.
+    network_mode: host
+    hostname: ${PBX_FQDN:?PBX_FQDN is required}
+    extra_hosts:
+      - "${PBX_FQDN:?PBX_FQDN is required}:127.0.1.1"
+    env_file:
+      - ${APPLIANCE_ENV_FILE:-.env}
+    environment:
+      # PostgreSQL is published on the host; reach it through loopback.
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${POSTGRES_HOST_PORT:?POSTGRES_HOST_PORT is required}
+    volumes:
+      - asterisk-lib:/var/lib/asterisk
+      - asterisk-keys:/var/lib/asterisk/keys
+      - asterisk-sounds:/var/lib/asterisk/sounds
+      - asterisk-phoneprov:/var/lib/asterisk/phoneprov
+      - asterisk-spool:/var/spool/asterisk
+      - asterisk-log:/var/log/asterisk
 
   backend:
     build:
@@ -29,27 +67,48 @@ services:
         condition: service_healthy
     environment:
       DB_HOST: postgres
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-asterisk}
-      DB_USER: ${DB_USER:-asterisk}
-      DB_PASSWORD: ${DB_PASSWORD:-asterisk_pass}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-secret-key}
-      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80}
+      DB_PORT: ${DB_PORT:?DB_PORT is required}
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:?JWT_ACCESS_TOKEN_EXPIRE_MINUTES is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       FLASK_ENV: production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     ports:
-      - "${BACKEND_HOST_PORT:-5000}:5000"
+      - "${BACKEND_HOST_PORT:?BACKEND_HOST_PORT is required}:5000"
+    networks:
+      - appnet
 
   frontend:
     image: nginx:alpine
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "${FRONTEND_HOST_PORT:-8080}:80"
+      - "${FRONTEND_HOST_PORT:?FRONTEND_HOST_PORT is required}:80"
+    networks:
+      - appnet
+
+# Project-scoped bridge for application services, not host-network Asterisk.
+networks:
+  appnet:
+    driver: bridge
 
 volumes:
   pgdata:
+  asterisk-lib:
+  asterisk-keys:
+  asterisk-sounds:
+  asterisk-phoneprov:
+  asterisk-spool:
+  asterisk-log:

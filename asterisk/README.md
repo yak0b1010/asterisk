@@ -1,276 +1,277 @@
-# Guide
+# Asterisk PBX guide
 
-<!--toc:start-->
+This directory owns the PBX image, baked configuration, runtime templating and
+PBX-only tooling. Use the [root guide](../README.md#quick-start) for the full
+Compose stack and [the API guide](../backend/README.md#start-and-make-a-call)
+for dashboard provisioning and a calling example.
 
-- [Guide](#guide)
-  - [Purpose](#purpose)
-  - [Base Image](#base-image)
-  - [Directory Layout](#directory-layout)
-  - [How It Works](#how-it-works)
-  - [Operating Modes](#operating-modes)
-  - [Configuration Layout](#configuration-layout)
-  - [Base Operation](#base-operation)
-    - [Ports](#ports)
-    - [Volumes](#volumes)
-    - [Environment](#environment)
-  - [Runtime Templating](#runtime-templating)
-  - [PostgreSQL Realtime (ODBC)](#postgresql-realtime-odbc)
-  - [Makefile Targets](#makefile-targets)
-  - [Testing The PBX](#testing-the-pbx)
-  - [Networking Notes](#networking-notes)
-  - [Common Operations](#common-operations)
+## Contents
 
-<!--toc:end-->
+- [Image and layout](#image-and-layout)
+- [Configuration ownership and modes](#configuration-ownership-and-modes)
+- [Runtime environment](#runtime-environment)
+- [Networking and storage](#networking-and-storage)
+- [Realtime integration](#realtime-integration)
+- [Running and inspecting](#running-and-inspecting)
+- [Firewall helper](#firewall-helper)
+- [Validation and remaining work](#validation-and-remaining-work)
 
-## Purpose
+## Image and layout
 
-This directory owns everything specific to the PBX: the image definition, the
-configuration baked into it, the runtime templating, and the tooling around them.
+The approved base is regular Asterisk **22.11.0 on Debian Trixie amd64**:
 
-Asterisk's source tree is _not_ vendored here. Tracking it is inconvenient and
-unnecessary, so configuration samples are extracted from the base Docker image
-instead of cloned from the upstream repository. Everything that ships to production is
-authored in `conf/`.
-
-## Base Image
-
-| Field   | Value                                                                     |
-| ------- | ------------------------------------------------------------------------- |
-| Image   | `andrius/asterisk`                                                        |
-| Tag     | `22.8-cert4_debian-trixie-8d9e955`                                        |
-| Digest  | `sha256:f3bd01300f0c36c8a7ea5bd9472c4b906d0f85410c3ea429166a0fedac6ad3ee` |
-| Base OS | Debian Trixie                                                             |
-| Version | Certified Asterisk 22.8-cert4 (LTS, security-fix branch)                  |
-
-The values live in the root `.env` and are injected as a single `--build-arg BASE_IMAGE`.
-Pinning by digest is required: the tag alone can be re-pointed upstream by a rebuild.
-_If there is a contradiction between the `.env` and this table, the `.env` wins._
-
-## Directory Layout
-
-```txt
-asterisk/
-├── Dockerfile            # Layers on the pinned base image
-├── Makefile              # PBX-only targets (build/run/verify)
-├── TODO.md               # Outstanding PBX work
-├── scripts/
-│   └── entrypoint-wrapper.sh   # Runtime templating, then base entrypoint
-└── conf/
-    ├── base/             # Always baked (transports, modules, rtp, http)
-    ├── standalone/       # Mode overlay: static endpoints + dialplan
-    ├── realtime/         # Mode overlay: sorcery/extconfig for PostgreSQL
-    └── samples/          # Untouched upstream samples — reference only
+```text
+andrius/asterisk:22.11.0_debian-trixie-amd64@sha256:887595176c64d3bc10387f198b6248347cb5a91969f377b1b64641aeaf11acea
 ```
 
-`conf/samples/` is never copied into the image. It exists so a lost stanza can be
-looked up in the version that matches the pinned build. Refresh it with `make samples`.
+Compose and the PBX Makefile construct `BASE_IMAGE` from the root `.env`
+image/tag/digest settings. The Dockerfile has the same fallback pin.
+The base supplies `pbx_realtime.so`; the abandoned compilation stage is gone.
+The Dockerfile installs PostgreSQL ODBC, core GSM prompts and WAV hold music.
+Installed hold music still has a runtime path warning; see the findings below.
 
-## How It Works
+```text
+Dockerfile
+Makefile
+README.md
+TODO.md
+conf/
+  base/          Shared transports, modules, test dialplan, RTP/HTTP settings
+  standalone/    Static department endpoints, mailboxes, queues and dialplan
+  realtime/      ODBC/Sorcery mappings and service configuration
+  scripts/       entrypoint-wrapper.sh and firewall.sh
+```
 
-The `Dockerfile` uses the pinned base image and adds only what the base does not
-provide:
+`make samples` can extract the base image's `/etc/asterisk` into `conf/samples/`
+for reference. That directory is not currently part of this workspace and is
+never copied into the appliance image. Asterisk source is not vendored.
 
-1. `odbc-postgresql` — the base ships unixODBC but **not** the PostgreSQL ODBC driver,
-   which realtime configuration requires.
-2. Core sounds and music-on-hold — the base image is intentionally minimal and ships no
-   prompts, so voicemail and IVR would be silent.
-3. `conf/base/` plus exactly one mode overlay, baked into `/etc/asterisk`.
-4. `scripts/entrypoint-wrapper.sh`, which renders runtime values before starting
-   Asterisk and then defers to the base image's entrypoint.
+## Configuration ownership and modes
 
-Configuration is therefore split by ownership:
+| Concern | Source / update behavior |
+| --- | --- |
+| Shared infrastructure | `conf/base/`, baked into the image |
+| Mode-specific settings | `conf/standalone/` or `conf/realtime/`, copied after the base |
+| Realtime provisioning | PostgreSQL native endpoint, auth, AOR, dialplan, mailbox and queue tables |
+| Runtime values | Root env, rendered by `conf/scripts/entrypoint-wrapper.sh` |
+| Persistent state | PostgreSQL data, AstDB, voicemail/spool, keys, media and logs |
 
-- **Baked** — transports, module list, RTP/HTTP settings, dialplan files. Immutable; a
-  change means a rebuild.
-- **Realtime** — endpoints, aors, auths, voicemail boxes, queues. Stored in PostgreSQL
-  and written by the backend, not by files.
-- **Runtime** — credentials, RTP range, ODBC DSN. Rendered at container start from the
-  environment.
-- **State** — `astdb`, voicemail audio, recordings, TLS keys, logs. Held in named
-  volumes.
+`ASTERISK_MODE` selects the build overlay, not a runtime conversion between
+static and database configuration. Rebuild when switching modes.
 
-## Operating Modes
+| Mode | Phone/routing source | Start path |
+| --- | --- | --- |
+| `realtime` | PostgreSQL native tables via ODBC | Root `docker compose up --build` |
+| `standalone` | Static files, including extensions `100–599` | PBX-only Makefile with `ASTERISK_MODE=standalone` |
 
-The mode is chosen by `ASTERISK_MODE` in the root `.env` and baked at build time
-through `--build-arg MODE`.
+Standalone needs no database. Dashboard DB edits do not affect its static phones.
+Its static services include queues `010–014` and voicemail `020/021`.
+The realtime demo uses corresponding database records and adds IVR `030` and
+conference `040`; these two additions are not standalone equivalents.
 
-|                   | `standalone`                            | `realtime`                       |
-| ----------------- | --------------------------------------- | -------------------------------- |
-| Database required | no                                      | yes                              |
-| Baked overlay     | `conf/standalone/`                      | `conf/realtime/`                 |
-| Endpoints         | `pjsip_endpoints.conf` (two test users) | `ps_endpoints` table via sorcery |
-| Dialplan          | static `extensions_custom.conf`         | `switch => Realtime/@`           |
-| ODBC files        | never created                           | rendered at start from `DB_*`    |
-| Built by          | `make build-standalone`                 | `make build-realtime`            |
-| Run by            | `make up` (this directory)              | `make -C .. up` (full stack)     |
+Base `modules.conf` loads first and includes `modules_custom.conf` at its end.
+Realtime appends explicit required modules; standalone supplies a comment-only
+placeholder. Declaring a module does not install it or prove that it loaded.
 
-`odbc show all` returning nothing in `standalone` mode is correct, not a fault.
+Both modes retain these **static test numbers**, ahead of DB routes:
 
-## Configuration Layout
+| Number | Purpose |
+| --- | --- |
+| `000` | Echo |
+| `001` | `hello-world` playback |
+| `002` | DTMF collection/readback |
+| `003` | Record/playback |
+| `004` | Music on hold |
 
-| File                                     | Mode       | Purpose                                           |
-| ---------------------------------------- | ---------- | ------------------------------------------------- |
-| `conf/base/asterisk.conf`                | both       | User/group and documentation language             |
-| `conf/base/modules.conf`                 | both       | Autoload, ODBC preloads, disabled modules         |
-| `conf/base/logger.conf`                  | both       | Console logging for `docker logs`                 |
-| `conf/base/rtp.conf`                     | both       | Media range (rewritten at start) and ICE          |
-| `conf/base/http.conf`                    | both       | HTTP/ARI on 8088, TLS/WSS block commented         |
-| `conf/base/pjsip.conf`                   | both       | UDP transport, includes the mode file             |
-| `conf/base/extensions.conf`              | both       | Dialplan general settings, includes the mode file |
-| `conf/standalone/pjsip_endpoints.conf`   | standalone | Static endpoints `1001`, `1002`                   |
-| `conf/standalone/extensions_custom.conf` | standalone | Dial/Echo/Playback test dialplan                  |
-| `conf/realtime/pjsip_endpoints.conf`     | realtime   | Placeholder so the include resolves               |
-| `conf/realtime/extensions_custom.conf`   | realtime   | Realtime dialplan switch                          |
-| `conf/realtime/sorcery.conf`             | realtime   | Maps PJSIP objects to `ps_*` tables               |
-| `conf/realtime/extconfig.conf`           | realtime   | Maps dialplan, voicemail and queues               |
+These are configured capabilities, not a claim that every test has been exercised
+on the current image.
 
-Splitting is done through `#include` rather than file replacement, so the base layer is
-identical in both modes and the overlay only adds what differs.
+## Runtime environment
 
-## Base Operation
+The wrapper validates required settings, renders the following files, then
+executes `/usr/local/bin/entrypoint.sh` with the original container command.
 
-### Ports
+| Setting | Effect |
+| --- | --- |
+| `SIP_PORT` | UDP PJSIP transport bind |
+| `RTP_RANGE` | `rtpstart` / `rtpend` |
+| `HTTP_PORT`, `WSS_PORT` | HTTP bind and TLS/WSS bind |
+| `PBX_FQDN` | Container hostname in Compose/Makefile and generated certificate CN/SAN |
+| `PUID`, `PGID` | Ownership of generated TLS files, not a general process UID/GID switch |
+| `AMI_PASSWORD` | Nonempty writes AMI config with a `backend` user, bound to loopback on 5038 |
+| `ARI_PASSWORD` | Nonempty writes ARI config; empty AMI/ARI passwords leave those services disabled |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Required for realtime ODBC rendering |
 
-The base image exposes nothing (`ExposedPorts` is empty); ports are published by the
-Makefile or the compose service.
+TLS/WSS is **enabled in configuration**, not commented out. The wrapper creates
+a self-signed certificate when absent, using `PBX_FQDN`, `localhost` and
+`127.0.0.1` SANs. It does not regenerate an existing certificate on identity/IP
+changes. WebRTC calling and remote certificate trust still need acceptance.
+Setting AMI/ARI credentials does not implement backend supervision.
 
-| Port          | Protocol | Purpose                                       |
-| ------------- | -------- | --------------------------------------------- |
-| `5060`        | udp/tcp  | SIP signalling                                |
-| `10000-10499` | udp      | RTP media — value comes from `RTP_RANGE`      |
-| `8088`        | tcp      | HTTP / ARI                                    |
-| `8089`        | tcp      | HTTPS / WSS (WebRTC softphone)                |
-| `5038`        | tcp      | AMI — container network only, never published |
+## Networking and storage
 
-### Volumes
+The supported/tested deployment uses rootful Linux Docker and
+`network_mode: host` for Asterisk. There are no PBX Compose port mappings:
+listeners bind directly on the host. Rootless/Docker Desktop host-network
+behavior has not been validated.
 
-The base image declares six volumes. Not all are needed:
+| Setting / example port | Protocol | Purpose |
+| --- | --- | --- |
+| `SIP_PORT=5060` | UDP | SIP signaling; no plain TCP SIP transport configured |
+| `RTP_RANGE=10000-10199` | UDP | Media |
+| `HTTP_PORT=8088` | TCP | Asterisk HTTP / ARI when enabled |
+| `WSS_PORT=8089` | TCP | TLS HTTP / WSS |
+| `5038` | TCP loopback | AMI when enabled |
 
-| Path                          | Contents                          | Required                   |
-| ----------------------------- | --------------------------------- | -------------------------- |
-| `/var/spool/asterisk`         | voicemail, recordings, call files | **Yes** — user data        |
-| `/var/lib/asterisk`           | `astdb.sqlite3`, sounds, keys     | **Yes** — see note         |
-| `/etc/asterisk`               | configuration                     | Only if written at runtime |
-| `/var/log/asterisk`           | logs                              | Optional                   |
-| `/var/lib/asterisk/sounds`    | prompts, music on hold            | Baked instead              |
-| `/var/lib/asterisk/phoneprov` | phone auto-provisioning output    | No                         |
+PostgreSQL/backend/frontend use `appnet`. Compose overrides Asterisk's DB host
+to `127.0.0.1` and port to `POSTGRES_HOST_PORT`, published loopback-only.
+The backend instead uses `postgres:5432`. Do not use Docker service-name DNS
+from host-network Asterisk. LAN/NAT clients need firewall and media-address
+configuration; public-IP/local-net settings are not provisioned automatically.
 
-> The base declares `/var/lib/asterisk/{keys,phoneprov,sounds}` as volumes but _not_
-> the parent, so `astdb.sqlite3` — which holds device states, hints, parking and DND —
-> lives in the container layer and is lost when the container is recreated. Mount
-> `/var/lib/asterisk` as a **named volume** so it is seeded from the image and
-> survives. A bind-mount of an empty directory would hide the baked sounds.
+Compose has project-scoped named volumes for PostgreSQL and Asterisk's:
 
-### Environment
+- `/var/lib/asterisk` (including AstDB);
+- `/var/lib/asterisk/keys`, `/sounds`, and `/phoneprov`;
+- `/var/spool/asterisk`;
+- `/var/log/asterisk`.
 
-| Variable        | Default       | Purpose                          |
-| --------------- | ------------- | -------------------------------- |
-| `ASTERISK_MODE` | `standalone`  | Selects the baked overlay        |
-| `RTP_RANGE`     | `10000-10499` | Written into `rtp.conf` at start |
-| `AMI_PASSWORD`  | —             | Writes `manager.conf` when set   |
-| `ARI_PASSWORD`  | —             | Writes `ari.conf` when set       |
-| `DB_*`          | —             | ODBC DSN in `realtime` mode      |
-| `ASTERISK_UID`  | `1000`        | UID the Asterisk process runs as |
-| `ASTERISK_GID`  | `1000`        | GID the Asterisk process runs as |
+There is no persistent `/etc/asterisk` mount: configuration stays image-owned
+and runtime-rendered. The base image can create inherited anonymous volumes;
+disposable tests remove those with their containers. Named volumes survive
+normal `docker compose down`. Existing media volumes can mask newer image
+content, so rebuilding does not necessarily refresh their files.
 
-Any container sharing configuration or state with Asterisk must run as `1000:1000`, or
-writes fail with `EACCES`.
+## Realtime integration
 
-## Runtime Templating
+ODBC uses a DSN and class, not a PostgreSQL connection URI:
 
-`scripts/entrypoint-wrapper.sh` runs before the base entrypoint and only touches files
-whose values come from the environment:
+| File | Role |
+| --- | --- |
+| `/etc/odbcinst.ini` | PostgreSQL Unicode driver registration, discovered at build time |
+| `/etc/odbc.ini` | Runtime DSN `asterisk-pgsql` |
+| `/etc/asterisk/res_odbc.conf` | Runtime ODBC class `asterisk`, credentials and connection options |
+| `conf/realtime/sorcery.conf` | Native PJSIP object mappings, including writable contacts |
+| `conf/realtime/extconfig.conf` | Realtime dialplan/mailbox/queue families |
+| `conf/realtime/cdr_adaptive_odbc.conf` | CDR writes, start-to-calldate alias, UTC and quoted identifiers |
 
-| Trigger                                  | Action                                                                                 |
-| ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `RTP_RANGE`                              | Rewrites `rtpstart` / `rtpend` in `rtp.conf` so the published UDP range always matches |
-| `AMI_PASSWORD`                           | Writes a complete `manager.conf` with a `[backend]` user                               |
-| `ARI_PASSWORD`                           | Writes a complete `ari.conf` with an `[asterisk]` user                                 |
-| `ASTERISK_MODE=realtime` + `DB_PASSWORD` | Writes `/etc/odbc.ini` and `res_odbc.conf`                                             |
-| `ASTERISK_MODE=standalone`               | Logs that ODBC is skipped and leaves no ODBC files behind                              |
+Fresh initialization is in `../db/init/`. The schema is a hand-consolidated
+simple-PBX subset derived from `certified-22.8-cert4` upstream migrations;
+it has not been fully rederived/audited against every 22.11.0 field.
+Basic native provisioning/registration/calling/CDR now pass on 22.11.0.
+See [schema provenance](../db/README.md#schema-source-and-deliberate-differences).
 
-The wrapper ends with `exec /usr/local/bin/entrypoint.sh "$@"` so the base image's own
-initialisation (privilege drop, environment setup) still applies.
+With demo off, only one administrator is seeded; no PBX objects are provisioned.
+Exact `DEMO_DATA=yes` adds the documented dataset on first initialization only.
+The flag does not select different runtime capabilities. Existing volumes are
+neither migrated nor reseeded.
 
-## PostgreSQL Realtime (ODBC)
+Dynamic dialplan steps use `switch => Realtime/@` in `internal`, the five
+department `handle-*` contexts and `realtime-ivr`. Those contexts remain as
+agreed; arbitrary new contexts need a static declaration. DB routes contain
+the IVR branching and `CONFBRIDGE()`/`ConfBridge()` steps; actual service-call
+acceptance remains. The managed IVR builder is unavailable pending its design,
+but it does not disable execution of existing dialplan.
 
-Asterisk reaches PostgreSQL through ODBC, which is a two-level indirection — a **DSN**,
-never a connection URI. A `postgresql://…` string appears only in the Go backend's
-`DATABASE_URL`.
+CDR writes alias `start` to `calldate` and quote identifiers because PostgreSQL
+reserves `end`. Compose waits for PostgreSQL's final TCP server before starting
+Asterisk, preventing CDR metadata discovery during temporary initialization.
+Mailbox settings are realtime; message audio remains in the spool.
 
-| File                           | Role                                      | Written by  |
-| ------------------------------ | ----------------------------------------- | ----------- |
-| `/etc/odbcinst.ini`            | Registers the psql ODBC driver            | Image build |
-| `/etc/odbc.ini`                | Defines the DSN (`Servername = postgres`) | Entrypoint  |
-| `/etc/asterisk/res_odbc.conf`  | Declares the ODBC class and credentials   | Entrypoint  |
-| `/etc/asterisk/sorcery.conf`   | Maps PJSIP objects to `ps_*` tables       | Baked       |
-| `/etc/asterisk/extconfig.conf` | Maps dialplan, voicemail and queues       | Baked       |
+The tested endpoint/route creation path works without a reload. Do not infer
+instant revocation, live-call termination or uniform queue/mailbox refresh from
+that result. See [updates and caches](../db/README.md#updates-and-caches).
 
-`res_odbc.conf`'s `dsn` must match a section name in `odbc.ini`, and the section name
-in `res_odbc.conf` is the class referenced by `sorcery.conf` / `extconfig.conf` as
-`odbc,<class>`.
+## Running and inspecting
 
-Realtime tables come from Asterisk's own SQL (`contrib/realtime/postgresql/*.sql`,
-`22` branch) and are applied by PostgreSQL's `docker-entrypoint-initdb.d` on the first
-boot of an empty data volume. See `TODO.md` — those files are not in the repository yet.
-
-## Makefile Targets
-
-| Target                                | Description                                                           |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| `help`                                | List targets                                                          |
-| `env`                                 | Create the root `.env` from `.env.example` if missing                 |
-| `pull`                                | Pull the digest-pinned base image                                     |
-| `samples`                             | Re-extract the base image's `/etc/asterisk` into `conf/samples/`      |
-| `build`                               | Build using `MODE` from `.env` (override: `MODE=realtime`)            |
-| `build-standalone` / `build-realtime` | Build a specific mode                                                 |
-| `up`                                  | Start the container (realtime prints a hint to use the root Makefile) |
-| `down` / `rm` / `restart`             | Stop, remove, restart                                                 |
-| `logs`                                | Follow container logs                                                 |
-| `ps`                                  | Container status                                                      |
-| `test`                                | Smoke test: version, ODBC modules, endpoints, RTP, dialplan           |
-| `rtp-check`                           | Show the RTP range Asterisk actually bound                            |
-| `cli` / `shell`                       | Asterisk console / shell in the container                             |
-| `clean`                               | Remove built images and this mode's volumes                           |
-
-## Testing The PBX
-
-`standalone` mode ships two users and three test extensions:
-
-| Extension | Behaviour                                 |
-| --------- | ----------------------------------------- |
-| `1001`    | Registered endpoint (password `1001pass`) |
-| `1002`    | Registered endpoint (password `1002pass`) |
-| `999`     | Echo test                                 |
-| `600`     | Plays `hello-world`                       |
-
-Register a softphone to `<host>:5060` as `1001`, dial `999` for an echo check, then
-dial `1002` from a second client to place a real call. Headless alternative:
-`sipp`/`sipsak` against `sip:1001@<host>`.
-
-## Networking Notes
-
-- **Rootful Docker (supported target)**: publish `5060` plus the RTP range, and set
-  `external_media_address` to the host's reachable IP.
-- **Rootless Docker**: publishing thousands of UDP ports spawns one userland proxy per
-  port and fails. Keep `RTP_RANGE` in the low hundreds of ports, and note that
-  `--network host` under rootless is _not_ the host network namespace.
-
-## Common Operations
+For the full stack, run from the repository root:
 
 ```sh
-make env                       # create the root .env
-make pull                      # refresh the pinned base image
-make build-standalone          # build the standalone image
-make up                        # start it
-make test                      # smoke-test
-make rtp-check                 # confirm the bound media range
-make cli                       # Asterisk console
-make down && make rm           # stop and remove
-
-make samples                   # refresh conf/samples/ from the base image
-
-docker exec asterisk-standalone asterisk -rx "core show version"
-docker exec asterisk-standalone asterisk -rx "pjsip show endpoints"
-docker exec asterisk-standalone asterisk -rx "odbc show all"
+docker compose up --build
+docker compose exec asterisk asterisk -rx "core show version"
+docker compose exec asterisk asterisk -rx "pjsip show endpoints"
+docker compose exec asterisk asterisk -rx "odbc show all"
+docker compose exec asterisk asterisk -rx "cdr show status"
+docker compose logs -f asterisk
 ```
+
+For PBX-only standalone development, set root `.env` to
+`ASTERISK_MODE=standalone`, then:
+
+```sh
+make -C asterisk build
+make -C asterisk up
+make -C asterisk test
+make -C asterisk cli
+make -C asterisk down
+```
+
+Do not run the PBX-only container beside the host-network Compose PBX. Register
+`100` / `100pass` and `101` / `101pass` for a static department example;
+the old `1001/1002`, `999` and `600` examples are not the current standalone setup.
+Standalone regression on the new image is still pending.
+
+| PBX-only target | Behavior |
+| --- | --- |
+| `help`, `env`, `check-pin` | List targets, bootstrap missing root env, report pin drift |
+| `pull`, `samples` | Pull pin or extract reference configuration |
+| `build`, `build-standalone`, `build-realtime` | Build selected overlay |
+| `up` | Standalone lifecycle; realtime prints a hint to start the root stack |
+| `down`, `rm`, `restart`, `recreate`, `rebuild` | PBX-only lifecycle; named state volumes retained |
+| `logs`, `ps`, `cli`, `shell`, `rtp-check`, `test` | Inspect the Makefile-managed container, not Compose's service container |
+| `firewall`, `firewall-off`, `firewall-status`, `run` | Explicit host firewall helpers; `run` applies firewall then `up` |
+| `clean` | Destructive development cleanup: removes container, built mode images and this mode's named volumes |
+
+The CLI smoke target inspects status/configuration; it does not place calls or
+replace the Python/Node/full-stack tests.
+
+## Firewall helper
+
+`conf/scripts/firewall.sh` is invoked explicitly by the PBX Makefile, not by
+`docker compose up`.
+
+- `FIREWALL_ENABLED=no`: on/off leave host firewall rules untouched.
+- `FIREWALL_MODE=runtime`: add ports to active non-Docker firewalld zones;
+  changes disappear on reload/reboot.
+- `FIREWALL_MODE=permanent`: maintain the named `FIREWALL_POLICY` with
+  ingress `ANY`, egress `HOST`, target `CONTINUE`, priority `-100`. Applying or
+  removing it can reload firewalld.
+- The helper opens configured SIP/RTP UDP and HTTP/WSS/dashboard TCP ports.
+  It still uses `DASHBOARD_PORT`, while Compose publishes `FRONTEND_HOST_PORT`;
+  keep those aligned until environment cleanup.
+- Without firewalld, use `FIREWALL_ENABLED=no` and arrange equivalent host/cloud
+  rules separately. Azure NSG/ufw validation remains.
+
+Older development notes reported permanent `nm-shared` zone openings alongside
+the policy. Their current host state has not been rechecked. Inspect active
+zones/policy and test hotspot registration before deliberately removing
+redundant rules; do not assume the helper cleans legacy entries.
+
+## Validation and remaining work
+
+Passed on the approved image:
+
+- Realtime image build, real host-network ODBC queries, active Asterisk ODBC
+  connection, adaptive CDR registration and required modules Running.
+- Fresh initialization/seed guards/rollback/persistence.
+- Disposable full Compose stacks with demo off/on: same-origin login,
+  API-created endpoints/routes, two digest registrations, internal calling,
+  bidirectional loopback PCMU RTP and answered CDR API retrieval.
+
+Reproduce using [database tests](../db/README.md#validation-results) and
+[full-stack tests](../backend/README.md#validation). Test PBXs bind real host
+ports; do not run them alongside another PBX.
+
+Remaining findings:
+
+- Process/container health is not proof of required-module readiness. The
+  original image stayed running after a required-module failure; fail-closed
+  behavior still needs investigation.
+- MOH reports no files at its configured path; packaged WAV files exist
+  elsewhere. `random=yes` also needs review against `sort=random`.
+- Optional Vorbis format loading lacks `libvorbisenc.so.2`.
+- Voicemail silence settings emit a warning.
+- LAN/NAT phones, real-browser clicks, voicemail/queue/IVR/conference calls,
+  detailed CDR semantics, outage recovery and standalone regression remain.
+
+See [TODO.md](TODO.md) for PBX-specific remaining work.

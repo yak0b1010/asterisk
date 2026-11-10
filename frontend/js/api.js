@@ -39,7 +39,7 @@ export async function api(path, { method = "GET", body, headers = {}, requiresAu
   } catch (err) {
     // Network error (CORS, DNS, connection refused, etc.)
     showDebug(`Network error on ${method} ${path}:`, err.message);
-    throw new Error(`Cannot reach backend at ${API_BASE || "same origin"}. Is the backend running on port 5000?`);
+    throw new Error(`Cannot reach the API at ${API_BASE || "same origin"}. Check the frontend proxy and backend containers.`);
   }
 
   showDebug(`${method} ${path} → HTTP ${res.status}`);
@@ -80,6 +80,27 @@ export const get = (p, o) => api(p, { ...o, method: "GET" });
 export const post = (p, b, o) => api(p, { ...o, method: "POST", body: b });
 export const put = (p, b, o) => api(p, { ...o, method: "PUT", body: b });
 export const del = (p, o) => api(p, { ...o, method: "DELETE" });
+
+// Render database text as text, never as HTML or inline JavaScript.
+export function tableRow(body, values, actions) {
+  const row = document.createElement("tr");
+  values.forEach((value) => {
+    const cell = document.createElement("td");
+    cell.textContent = value ?? "—";
+    row.appendChild(cell);
+  });
+  const cell = document.createElement("td");
+  cell.className = "actions";
+  actions.forEach(([label, handler]) => {
+    const button = document.createElement("button");
+    button.className = "nb-btn small";
+    button.textContent = label;
+    button.addEventListener("click", () => Promise.resolve().then(handler).catch((error) => alert(error.message)));
+    cell.appendChild(button);
+  });
+  row.appendChild(cell);
+  body.appendChild(row);
+}
 
 /* ── Auth helpers ── */
 export function setSession(tokenVal, user) {

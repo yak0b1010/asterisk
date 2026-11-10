@@ -58,10 +58,7 @@
               <label class="nb-label">Queue Name</label>
               <input class="nb-input" id="q-name" name="name" placeholder="e.g. Support" required>
             </div>
-            <div class="nb-form-group">
-              <label class="nb-label">Queue Number</label>
-              <input class="nb-input" id="q-number" name="number" placeholder="e.g. 6001" required>
-            </div>
+            <p>Dial-in numbers are separate Dialplan entries using the Queue application.</p>
           </div>
           <div class="form-row">
             <div class="nb-form-group">
@@ -106,11 +103,9 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Number</th>
                 <th>Strategy</th>
                 <th>Members</th>
                 <th>Timeout</th>
-                <th>Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -149,7 +144,7 @@
               <tr>
                 <th>Interface</th>
                 <th>Penalty</th>
-                <th>Active</th>
+                <th>Paused</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -161,13 +156,11 @@
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api, get, post, put, del } from "./js/api.js";
+    import { api, get, post, put, del, tableRow } from "./js/api.js";
 
     const form = document.getElementById("q-form");
     const alertEl = document.getElementById("q-alert");
@@ -189,21 +182,9 @@
       tbody.innerHTML = "";
       countEl.textContent = data.length;
       data.forEach((q) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${q.name}</strong></td>
-          <td>${q.number}</td>
-          <td>${q.strategy}</td>
-          <td>${q.member_count}</td>
-          <td>${q.timeout}s</td>
-          <td>${q.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small" onclick="app.editQ(${q.id})">Edit</button>
-            <button class="nb-btn small" onclick="app.openMembers(${q.id}, '${q.name}')">Members</button>
-            <button class="nb-btn small danger" onclick="app.deleteQ(${q.id})">Delete</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
+        tableRow(tbody, [q.name, q.strategy, q.member_count, q.timeout],
+          [["Edit", () => app.editQ(q.id)], ["Members", () => app.openMembers(q.id, q.name)],
+           ["Delete", () => app.deleteQ(q.id)]]);
       });
     }
 
@@ -216,12 +197,10 @@
       e.preventDefault();
       const payload = {
         name: document.getElementById("q-name").value,
-        number: document.getElementById("q-number").value,
         strategy: document.getElementById("q-strategy").value,
         wrapup_time: parseInt(document.getElementById("q-wrapup").value) || 0,
         max_len: parseInt(document.getElementById("q-maxlen").value) || 0,
         timeout: parseInt(document.getElementById("q-timeout").value) || 60,
-        is_active: true,
       };
       try {
         if (editingId) {
@@ -270,16 +249,8 @@
       const data = await get(`/queues/${qId}/members`);
       qmTbody.innerHTML = "";
       data.forEach((m) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${m.interface}</strong></td>
-          <td>${m.penalty}</td>
-          <td>${m.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small danger" onclick="app.removeMember(${qId}, ${m.id})">Remove</button>
-          </td>
-        `;
-        qmTbody.appendChild(tr);
+        tableRow(qmTbody, [m.interface, m.penalty, m.paused ? "yes" : "no"],
+          [["Remove", () => app.removeMember(qId, m.id)]]);
       });
     }
 
@@ -289,7 +260,6 @@
       const payload = {
         interface: document.getElementById("qm-interface").value,
         penalty: parseInt(document.getElementById("qm-penalty").value) || 0,
-        is_active: true,
       };
       try {
         await post(`/queues/${currentQueueId}/members`, payload);
@@ -308,7 +278,6 @@
         if (!q) return;
         document.getElementById("q-id").value = q.id;
         document.getElementById("q-name").value = q.name;
-        document.getElementById("q-number").value = q.number;
         document.getElementById("q-strategy").value = q.strategy;
         document.getElementById("q-timeout").value = q.timeout;
         document.getElementById("q-wrapup").value = q.wrapup_time;
@@ -335,7 +304,7 @@
       },
     };
 
-    loadQueues();
+    loadQueues().catch((error) => showAlert(error.message));
   </script>
 </body>
 </html>

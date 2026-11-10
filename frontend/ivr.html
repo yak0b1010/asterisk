@@ -155,9 +155,7 @@
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
@@ -315,7 +313,13 @@
       },
     };
 
-    loadIvr();
+    // The former app-only menu tables are not part of the native schema.
+    // Existing IVR dialplan remains editable on the Dialplan page.
+    showAlert("Managed IVR editor is unavailable pending its provisioning design. Existing IVRs run normally; use the Dialplan page to inspect their steps.");
+    document.querySelectorAll("form input, form select, form button").forEach((element) => {
+      element.disabled = true;
+    });
+    openAdd.disabled = true;
   </script>
 </body>
 </html>

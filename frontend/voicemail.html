@@ -53,6 +53,8 @@
         <h3 style="margin-top:0; text-transform:uppercase; font-size:1rem;">Add / Edit Mailbox</h3>
         <form id="vm-form" novalidate>
           <input type="hidden" id="vm-id">
+          <label class="nb-label" for="vm-context">Mailbox context</label>
+          <input class="nb-input" id="vm-context" value="default" maxlength="80">
           <div class="form-row">
             <div class="nb-form-group">
               <label class="nb-label">Mailbox</label>
@@ -60,7 +62,7 @@
             </div>
             <div class="nb-form-group">
               <label class="nb-label">Password</label>
-              <input class="nb-input" id="vm-password" name="password" placeholder="••••" required>
+              <input class="nb-input" id="vm-password" name="password" type="password" placeholder="PIN; blank when editing preserves it">
             </div>
           </div>
           <div class="form-row">
@@ -98,7 +100,6 @@
                 <th>Full Name</th>
                 <th>Email</th>
                 <th>Attach</th>
-                <th>Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -110,13 +111,11 @@
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api, get, post, put, del } from "./js/api.js";
+    import { api, get, post, put, del, tableRow } from "./js/api.js";
 
     const form = document.getElementById("vm-form");
     const alertEl = document.getElementById("vm-alert");
@@ -131,19 +130,8 @@
       tbody.innerHTML = "";
       countEl.textContent = data.length;
       data.forEach((v) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${v.mailbox}</strong></td>
-          <td>${v.full_name || "—"}</td>
-          <td>${v.email || "—"}</td>
-          <td>${v.attach ? '<span class="nb-badge success small">yes</span>' : '<span class="nb-badge dark small">no</span>'}</td>
-          <td>${v.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small" onclick="app.editVm(${v.id})">Edit</button>
-            <button class="nb-btn small danger" onclick="app.deleteVm(${v.id})">Delete</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
+        tableRow(tbody, [`${v.mailbox}@${v.context}`, v.full_name, v.email, v.attach],
+          [["Edit", () => app.editVm(v.id)], ["Delete", () => app.deleteVm(v.id)]]);
       });
     }
 
@@ -156,12 +144,11 @@
       e.preventDefault();
       const payload = {
         mailbox: document.getElementById("vm-mailbox").value,
+        context: document.getElementById("vm-context").value,
         password: document.getElementById("vm-password").value,
         full_name: document.getElementById("vm-name").value,
         email: document.getElementById("vm-email").value,
         attach: document.getElementById("vm-attach").checked,
-        delete_msg: false,
-        is_active: true,
       };
       try {
         if (editingId) {
@@ -200,10 +187,11 @@
         if (!v) return;
         document.getElementById("vm-id").value = v.id;
         document.getElementById("vm-mailbox").value = v.mailbox;
+        document.getElementById("vm-context").value = v.context;
         document.getElementById("vm-password").value = v.password || "";
         document.getElementById("vm-name").value = v.full_name || "";
         document.getElementById("vm-email").value = v.email || "";
-        document.getElementById("vm-attach").checked = v.attach;
+        document.getElementById("vm-attach").checked = v.attach === "yes";
         editingId = v.id;
         cancelBtn.style.display = "inline-block";
       },
@@ -214,7 +202,7 @@
       },
     };
 
-    load();
+    load().catch((error) => showAlert(error.message));
   </script>
 </body>
 </html>

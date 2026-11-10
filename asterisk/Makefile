@@ -26,36 +26,57 @@ endif
 -include $(ENV_FILE)
 export
 
-# ── Values from .env (strip: inline comments leave trailing space) ─────────
+# ── Values from .env (no hidden defaults) ─────────────────────────────────
+# Every value is read directly from the root .env. Missing values abort the
+# run instead of being replaced by a default inside this Makefile.
 IMAGE_NAME := $(strip $(ASTERISK_IMAGE))
 IMAGE_TAG  := $(strip $(ASTERISK_TAG))
 DIGEST     := $(strip $(ASTERISK_DIGEST))
-MODE       := $(if $(strip $(ASTERISK_MODE)),$(strip $(ASTERISK_MODE)),standalone)
-APP_IMAGE  := $(if $(strip $(ASTERISK_APP_IMAGE)),$(strip $(ASTERISK_APP_IMAGE)),asterisk-appliance)
+MODE       := $(strip $(ASTERISK_MODE))
+APP_IMAGE  := $(strip $(ASTERISK_APP_IMAGE))
 
-ifeq ($(IMAGE_NAME),)
-$(error ASTERISK_IMAGE is not set - run 'make env' and edit .env)
-endif
-ifeq ($(IMAGE_TAG),)
-$(error ASTERISK_TAG is not set - see .env.example)
-endif
-
-BASE_REF   := $(IMAGE_NAME):$(IMAGE_TAG)$(if $(DIGEST),@$(DIGEST))
+BASE_REF   := $(IMAGE_NAME):$(IMAGE_TAG)@$(DIGEST)
 APP_TAG    := $(MODE)
 CONTAINER  := asterisk-$(MODE)
 
-SIP_PORT       := $(if $(strip $(SIP_PORT)),$(strip $(SIP_PORT)),5060)
-RTP_RANGE      := $(if $(strip $(RTP_RANGE)),$(strip $(RTP_RANGE)),10000-10199)
-HTTP_PORT      := $(if $(strip $(HTTP_PORT)),$(strip $(HTTP_PORT)),8088)
-WSS_PORT       := $(if $(strip $(WSS_PORT)),$(strip $(WSS_PORT)),8089)
-DASHBOARD_PORT := $(if $(strip $(DASHBOARD_PORT)),$(strip $(DASHBOARD_PORT)),8080)
+SIP_PORT       := $(strip $(SIP_PORT))
+RTP_RANGE      := $(strip $(RTP_RANGE))
+HTTP_PORT      := $(strip $(HTTP_PORT))
+WSS_PORT       := $(strip $(WSS_PORT))
+DASHBOARD_PORT := $(strip $(DASHBOARD_PORT))
 
-# PBX_FQDN is preferred; TLS_COMMON_NAME keeps older .env files working.
-FQDN := $(strip $(or $(PBX_FQDN),$(TLS_COMMON_NAME),asterisk.local))
+# PBX_FQDN is the container hostname and the TLS certificate common name.
+FQDN := $(strip $(PBX_FQDN))
 
-FIREWALL_ENABLED := $(if $(strip $(FIREWALL_ENABLED)),$(strip $(FIREWALL_ENABLED)),yes)
-FIREWALL_MODE    := $(if $(strip $(FIREWALL_MODE)),$(strip $(FIREWALL_MODE)),permanent)
+FIREWALL_ENABLED := $(strip $(FIREWALL_ENABLED))
+FIREWALL_MODE    := $(strip $(FIREWALL_MODE))
+FIREWALL_POLICY  := $(strip $(FIREWALL_POLICY))
 FIREWALL_SCRIPT  := $(HERE_ABS)/conf/scripts/firewall.sh
+
+# ── Environment validation ────────────────────────────────────────────────
+# env and help bootstrap a clone before .env exists. Every other goal requires
+# a complete environment so that no value is silently substituted.
+BOOTSTRAP_GOALS := env help
+GOALS           := $(or $(MAKECMDGOALS),help)
+CHECK_GOALS     := $(filter-out $(BOOTSTRAP_GOALS),$(GOALS))
+
+ifneq ($(CHECK_GOALS),)
+REQUIRED_ENV := ASTERISK_IMAGE ASTERISK_TAG ASTERISK_DIGEST PUID PGID \
+                SIP_PORT RTP_RANGE HTTP_PORT WSS_PORT DASHBOARD_PORT \
+                FQDN FIREWALL_ENABLED FIREWALL_MODE FIREWALL_POLICY \
+                MODE APP_IMAGE
+MISSING_ENV := $(strip $(foreach v,$(REQUIRED_ENV),$(if $(strip $($(v))),,$(v))))
+ifeq ($(wildcard $(ENV_FILE)),)
+MISSING_ENV += $(ENV_FILE)
+endif
+ifneq ($(MISSING_ENV),)
+$(error Missing or empty environment values: $(MISSING_ENV) - run 'make env' and edit .env)
+endif
+endif
+
+# Export the normalized values so subprocesses (firewall.sh) see the same ones.
+export MODE APP_IMAGE SIP_PORT RTP_RANGE HTTP_PORT WSS_PORT DASHBOARD_PORT \
+       FQDN FIREWALL_ENABLED FIREWALL_MODE FIREWALL_POLICY
 
 VOL_LIB       := asterisk-$(MODE)-lib
 VOL_SPOOL     := asterisk-$(MODE)-spool
@@ -64,7 +85,7 @@ VOL_KEYS      := asterisk-$(MODE)-keys
 VOL_SOUNDS    := asterisk-$(MODE)-sounds
 VOL_PHONEPROV := asterisk-$(MODE)-phoneprov
 
-ENV_FLAG := $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),)
+ENV_FLAG := --env-file $(ENV_FILE)
 
 DOCKER_RUN := docker run -d --name $(CONTAINER) --restart unless-stopped \
   --network host \

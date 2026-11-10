@@ -1,118 +1,105 @@
-# TODO
+# PBX TODO
 
-<!--toc:start-->
+Keep this checklist aligned with PBX changes. It records implementation and
+validation separately; a configured feature is not necessarily accepted.
+No commit, push, merge, sync or other Git task is authorized in this thread.
 
-- [TODO](#todo)
-  - [Rule](#rule)
-  - [1. Configuration](#1-configuration)
-  - [2. Image](#2-image)
-  - [3. Runtime](#3-runtime)
-  - [4. Firewall](#4-firewall)
-  - [5. Backend integration](#5-backend-integration)
-  - [6. Verification](#6-verification)
-  - [7. Documentation](#7-documentation)
+## Completed implementation
 
-<!--toc:end-->
+- [x] Approved regular Asterisk 22.11.0 Debian Trixie amd64 digest pin.
+  Dockerfile fallback and `.env.example` use the selected pin; the base supplies
+  `pbx_realtime.so`. Abandoned module compilation removed.
+- [x] Base-first configuration plus mode overlays. Shared `modules.conf`
+  includes mode `modules_custom.conf`; realtime explicitly requires modules,
+  standalone retains a placeholder.
+- [x] UDP SIP transport plus configured WSS transport; no plain TCP SIP transport.
+- [x] Runtime templating for SIP/HTTP/WSS ports, RTP range, ODBC and optional
+  AMI/ARI credentials. TLS certificate generated when absent.
+- [x] Native realtime PJSIP/contact, dialplan, mailbox and queue mappings.
+  Static `000–004` tests and five department handler contexts retained.
+- [x] Database IVR steps and dynamic ConfBridge example provisioning.
+  This means implementation exists, not that service-call acceptance passed.
+- [x] Adaptive ODBC CDR start alias, UTC timestamps and identifier quoting for
+  PostgreSQL's reserved `end`.
+- [x] Compose host-network Asterisk with hostname/runtime env and persistent
+  state mounts; PostgreSQL/backend/frontend on explicit `appnet`.
+- [x] Startup sequencing waits for PostgreSQL's final TCP server, not its
+  temporary init server. Frontend waits for backend health.
+- [x] Backend/frontend native-schema compatibility for SIP accounts, dialplan,
+  mailboxes, queues/members, administrators and dashboard queries.
+  Managed IVR builder is explicitly unavailable pending design approval.
+- [x] Root `make up/down/logs/ps/build` use full-stack Compose. PBX-only targets
+  remain separate; no missing backend/dashboard Dockerfile blocker remains.
+- [x] PBX-only idempotent lifecycle and named state mounts are implemented.
+- [x] Firewalld runtime/permanent helper and disabled mode are implemented.
+- [x] README files describe actual static numbering, script paths, transport/
+  TLS settings, Compose networking and firewall behavior.
 
-Outstanding work for the PBX directory.
+## Validation completed
 
-## Rule
+- [x] Realtime image builds; required realtime modules report Running.
+- [x] PostgreSQL ODBC driver executes real queries over host networking;
+  Asterisk has an active ODBC connection.
+- [x] Fresh demo-off/on initialization, non-`yes` guards, transaction rollback
+  and restart persistence checks pass.
+- [x] Disposable full Compose startup and API login/provisioning pass.
+- [x] API-created `7001/7002` accounts and routes work without reload.
+- [x] Two digest registrations and internal call with RTP received in both
+  directions pass on loopback, with demo disabled and enabled.
+- [x] Answered CDR written through adaptive ODBC is retrieved through the API.
 
-- [x] **Keep this file current.** Every change under `asterisk/` updates the
-      matching item here in the same commit. A PBX change is not finished
-      until this file reflects what was done and what remains.
+Commands/evidence are in [the database guide](../db/README.md#validation-results)
+and [the API/calling guide](../backend/README.md#validation).
+Earlier PBX-only lifecycle/firewall/transport checks were recorded before the
+current image change; they are not a current standalone/firewall regression pass.
 
-## 1. Configuration
+## Remaining acceptance
 
-- [x] **UDP-only SIP.** Removed `transport-tcp`; `transport-udp` and
-      `transport-wss` remain. SIP/RTP firewall rules are UDP only.
-- [x] **Ports from `.env`.** `entrypoint-wrapper.sh` templates `SIP_PORT`,
-      `HTTP_PORT`, `WSS_PORT`, and `RTP_RANGE`; values no longer drift from
-      the firewall.
-- [ ] **Identity (`PBX_FQDN`).** Drives the container hostname and TLS CN.
-      Still missing: `from_domain` on standalone endpoints,
-      `disable_multi_domain`, and certificate SAN regeneration.
-- [ ] **TLS SANs.** Certificate includes CN, localhost and 127.0.0.1 only.
-      Add current host IPv4 SANs and a `.stamp` marker so a changed FQDN/IP
-      set regenerates the cert.
-- [ ] **AMI / ARI.** `AMI_PASSWORD` and `ARI_PASSWORD` are empty in
-      `.env.example`; both services stay disabled until set.
-- [ ] **RTP / NAT.** `PUBLIC_IP`, `external_media_address` and `local_net`
-      are unset; required for clients behind NAT or non-host networking.
-- [ ] **Realtime schema.** `realtime` mode has no `db/init` schema; tables are
-      Alembic-managed in `contrib/ast-db-manage/`.
-- [ ] **Realtime `from_domain`.** Add `ps_endpoints.from_domain` handling for
-      PostgreSQL-backed endpoints.
+- [ ] Test real LAN/NAT softphones, signaling/media reachability and human audio.
+- [ ] Verify voicemail deposit, playback, shared-mailbox login and PIN writes.
+- [ ] Verify queue delivery, multiple agents, overflow, pause/penalty state and
+  lookup/cache refresh behavior.
+- [ ] Exercise IVR invalid/timeout/nested routes and conference PIN/capacity behavior.
+- [ ] Check exact CDR start/answer/end, duration/billsec, UTC interpretation,
+  linked IDs, failed calls and multiple legs.
+- [ ] Exercise database loss/recovery and consumer cache/session behavior.
+- [ ] Test transfer, forwarding and restriction routes when provisioned.
+- [ ] Run standalone regression on the approved image using static `100–599`
+  accounts and `000–004` tests. Do not use obsolete `1001/1002` examples.
+- [ ] Establish operational readiness beyond container health: required modules,
+  ODBC and actual routing. Investigate required-module failure not exiting.
 
-## 2. Image
+## Known startup/configuration findings
 
-- [x] **Pinned base image.** `ARG BASE_IMAGE` matches `.env`; `check-pin`
-      warns on drift.
-- [x] **Mode overlays.** `conf/base` + `conf/standalone` or `conf/realtime`.
-- [ ] **Dockerfile comment.** Line 11 has `ODBCARG MODE=standalone` fused into
-      the comment; split it into two lines.
-- [ ] **Healthcheck.** Confirm the base image still reports `healthy` with
-      host networking.
+- [ ] Fix MOH configured media path/no-files warning and deprecated `random=yes`.
+- [ ] Resolve optional Vorbis module's missing `libvorbisenc.so.2`.
+- [ ] Resolve voicemail `maxsilence` / `minsecs` warning.
+- [ ] Verify base-image healthcheck meaning under host networking; do not equate
+  `healthy` with required modules or call readiness.
+- [ ] Reconcile image media updates with existing persistent sounds/lib volumes.
+- [ ] Define NAT/public-IP/local-net configuration for remote deployment.
+- [ ] Review standalone `from_domain`, `disable_multi_domain` and identity policy.
+  Native `from_domain` exists in SQL but is not exposed by current endpoint CRUD.
+- [ ] Regenerate TLS certificates when identity/IP SANs change; test remote WSS
+  trust/calling. Current SANs include `PBX_FQDN`, localhost and 127.0.0.1.
 
-## 3. Runtime
+## Remaining integration and operations
 
-- [x] **Idempotent lifecycle.** `up` starts an existing stopped container,
-      no-ops when running, creates when missing, recreates when dead.
-      `restart` uses `docker restart`; `recreate` removes with `-v` and
-      creates; `rebuild` builds then recreates.
-- [x] **No name conflict.** `make up` no longer fails with
-      `container name already in use`.
-- [x] **Host networking.** `--network host`, `--hostname`, `--add-host`.
-- [ ] **Hostname migration.** Existing containers created before
-      `--hostname` need one `make recreate`; `up` only warns.
+- [ ] Approve the managed IVR provisioning design before adding app tables or
+  generated-dialplan ownership rules.
+- [ ] Wire live AMI/ARI monitoring; credentials/config alone are not integration.
+  Host-loopback AMI is not directly reachable as `localhost` from the appnet backend.
+- [ ] Organize environment settings and reconcile `DASHBOARD_PORT` with
+  `FRONTEND_HOST_PORT`; retain a clear host-port/container-port contract.
+- [ ] Validate firewalld policy and hotspot behavior on the target host. Inspect
+  previously reported legacy `nm-shared` entries before deliberate cleanup.
+- [ ] Document/test equivalent ufw/cloud NSG rules; none were changed in this pass.
+- [ ] Decide WSS/mobile requirements; no Flutter softphone exists in this workspace.
+- [ ] Implement coordinated DB/spool/AstDB/media/keys/config backup and restore.
+- [ ] For old PBX-only containers, apply hostname/image changes with deliberate
+  recreation; `up` can warn without applying them.
 
-## 4. Firewall
-
-- [x] **Stable firewalld policy.** `FIREWALL_MODE=permanent` creates
-      `asterisk-appliance` with `ingress=ANY`, `egress=HOST`,
-      `target=CONTINUE`, priority `-100`. Zone-independent.
-- [x] **Temporary mode.** `FIREWALL_MODE=runtime` adds only to active zones;
-      lost on reload/reboot.
-- [x] **Kill switch.** `FIREWALL_ENABLED=no` makes `firewall`/`firewall-off`
-      no-ops.
-- [ ] **Legacy zone entries.** `nm-shared` still has permanent
-      `5060/tcp 5060/udp 8088-8089/tcp 10000-10199/udp` from the earlier
-      manual fix. Remove them after the policy is verified.
-- [ ] **Azure / ufw.** Provide the NSG/ufw equivalent; on Azure set
-      `FIREWALL_ENABLED=no` and open the ports in the NSG.
-- [ ] **WSS/TCP decision.** SIP/RTP are UDP-only, but 8088/8089/8080 remain
-      TCP for HTTP/WSS. Drop WSS if the Flutter app moves to UDP SIP.
-
-## 5. Backend integration
-
-- [ ] `backend/Dockerfile` and `dashboard/Dockerfile` are empty; the full
-      compose stack cannot build yet.
-- [ ] `docker-compose.yaml` still references a commented `postgres` service
-      in `depends_on`, publishes ports that conflict with host networking,
-      and lacks `hostname`, `extra_hosts`, `env_file`, and the keys/sounds/
-      phoneprov volumes.
-- [ ] Root `make up` currently delegates to the PBX; restore the full-stack
-      compose path when the backend/dashboard images exist.
-- [ ] `softphone/` is empty.
-
-## 6. Verification
-
-- [x] **Idempotency checks.** `up` twice, `down`/`up`, `restart`, `recreate`,
-      `firewall` twice, `firewall-off` twice.
-- [x] **UDP-only check.** `pjsip show transports` lists `transport-udp` and
-      `transport-wss`, no `transport-tcp`; `ss` shows 5060/udp only.
-- [ ] **Policy check.** `firewall-cmd --info-policy=asterisk-appliance` and
-      `--get-active-policies` after `make firewall`.
-- [ ] **Registration/audio.** Softphone Domain `asterisk.local`, Proxy
-      `10.42.0.1`; register 1001 and call 600.
-- [ ] **Hotspot test.** Remove the legacy `nm-shared` entries, reload, and
-      confirm registration still works through the policy.
-
-## 7. Documentation
-
-- [ ] `asterisk/README.md` is stale: says TLS/WSS are commented, lists
-      `5060/tcp`, and documents the old `scripts/` layout.
-- [ ] Root `README.md` still describes the full stack as the default
-      `make up`.
-- [ ] Add a firewall section: `FIREWALL_ENABLED`, `FIREWALL_MODE`,
-      permanent vs runtime, and the one-time `nm-shared` cleanup.
+Endpoint disable/re-enable and active-session revocation are **not** implemented.
+The agreed compatibility pass removes unsupported disable controls rather than
+pretending a database flag disables SIP. Any future revocation workflow needs a
+separate design; it is not a prerequisite silently added to current acceptance.

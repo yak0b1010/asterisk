@@ -1,11 +1,38 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
+# Single source of truth: the root .env.
 -include .env
 export
 
-# Compose project name (matches docker-compose.yaml `name:`)
+# Compose command. This is a tool override, not a configuration value.
 COMPOSE ?= docker compose
+
+# ── Environment validation ────────────────────────────────────────────────
+# env and help bootstrap a clone before .env exists. Start and build goals
+# require .env; full-stack start/build goals also require every value compose
+# consumes so that compose never falls back to a built-in default.
+ENV_GOALS    := stack-up up stack-build build run test clean asterisk-build asterisk-up asterisk-test
+VALUE_GOALS  := stack-up up stack-build build
+GOALS        := $(or $(MAKECMDGOALS),help)
+CHECK_ENV    := $(filter $(ENV_GOALS),$(GOALS))
+CHECK_VALUES := $(filter $(VALUE_GOALS),$(GOALS))
+
+ifneq ($(CHECK_ENV),)
+ifeq ($(wildcard .env),)
+$(error .env is missing - run 'make env')
+endif
+endif
+
+ifneq ($(CHECK_VALUES),)
+REQUIRED_ENV := POSTGRES_VERSION DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD \
+                POSTGRES_HOST_PORT BACKEND_HOST_PORT FRONTEND_HOST_PORT \
+                JWT_SECRET_KEY JWT_ACCESS_TOKEN_EXPIRE_MINUTES CORS_ORIGINS
+MISSING_ENV := $(strip $(foreach v,$(REQUIRED_ENV),$(if $(strip $($(v))),,$(v))))
+ifneq ($(MISSING_ENV),)
+$(error Missing or empty environment values: $(MISSING_ENV) - run 'make env' and edit .env)
+endif
+endif
 
 .PHONY: help env up down logs ps build stack-up stack-down stack-logs stack-ps stack-build clean
 help: ## Show available targets
@@ -17,9 +44,9 @@ env: ## Create .env from .env.example if missing
 	@echo ".env ready"
 
 # ── Full appliance stack (Postgres + Backend + Frontend) ──
-stack-up: env ## Start the full appliance stack (postgres + backend + frontend)
+stack-up: ## Start the full appliance stack (postgres + backend + frontend)
 	$(COMPOSE) up -d
-	@echo "Stack up. Frontend: http://localhost:${FRONTEND_HOST_PORT:-8080}  Backend: http://localhost:${BACKEND_HOST_PORT:-5000}"
+	@echo "Stack up. Frontend: http://localhost:$(FRONTEND_HOST_PORT)  Backend: http://localhost:$(BACKEND_HOST_PORT)"
 
 stack-down: ## Stop the full appliance stack
 	$(COMPOSE) down
