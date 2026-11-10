@@ -2,14 +2,15 @@
 
 # Fully-qualified base reference, injected from ../.env by the Makefile/compose:
 #   ${ASTERISK_IMAGE}:${ASTERISK_TAG}@${ASTERISK_DIGEST}
-ARG BASE_IMAGE=andrius/asterisk:22.8-cert4_debian-trixie-8d9e955@sha256:f3bd01300f0c36c8a7ea5bd9472c4b906d0f85410c3ea429166a0fedac6ad3ee
+ARG BASE_IMAGE=andrius/asterisk:22.11.0_debian-trixie-amd64@sha256:887595176c64d3bc10387f198b6248347cb5a91969f377b1b64641aeaf11acea
+ARG MODE=standalone
 
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS appliance
 
 # ---- Build mode ----------------------------------------------------------
 # standalone : static file configuration, no database required
-# realtime   : PJSIP/voicemail/queues resolved from PostgreSQL over ODBCARG MODE=standalone
-ARG MODE=standalone
+# realtime   : PJSIP/voicemail/queues/dialplan resolved over PostgreSQL ODBC
+ARG MODE
 ENV ASTERISK_MODE=${MODE}
 
 # ---- Extra packages the base image does not ship -------------------------

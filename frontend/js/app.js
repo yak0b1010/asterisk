@@ -2,7 +2,7 @@
 import { api, clearSession, getUser, isAuthenticated, testConnection } from "./api.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const user = getUser();
+  let user = getUser();
   const isAuth = isAuthenticated();
 
   // If on a protected page and not authenticated -> login
@@ -21,6 +21,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = "dashboard.html";
     return;
   }
+  if (isAuth && protectedPages.includes(current)) {
+    try {
+      user = await api("/auth/me");
+      if (user.role !== "admin") throw new Error("Administrator access required");
+    } catch (_) {
+      clearSession();
+      window.location.href = "index.html";
+      return;
+    }
+  }
 
   // Connection check (non-blocking)
   try {
@@ -28,8 +38,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!conn.ok) {
       const alertDiv = document.createElement("div");
       alertDiv.className = "alert error";
-      alertDiv.innerHTML = "<strong>Backend not reachable:</strong> " + conn.error +
-        "<br>Make sure the backend container is running on port 5000 and you opened the UI via http://localhost:8080";
+      alertDiv.textContent = "Backend not reachable: " + conn.error +
+        ". Check the frontend proxy and backend containers.";
       document.body.insertBefore(alertDiv, document.body.firstChild);
     }
   } catch (_) {
@@ -52,6 +62,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const links = document.querySelectorAll(".sidebar-nav a");
   links.forEach((a) => {
     const href = a.getAttribute("href");
+    if (href === "users.html") a.textContent = "Administrators";
     if (href && current && href !== "index.html" && current === href) {
       a.classList.add("active");
     }

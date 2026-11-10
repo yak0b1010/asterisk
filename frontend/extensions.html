@@ -44,8 +44,13 @@
 
       <h2 class="page-title">Extension Management</h2>
       <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
-        SIP/PJSIP extensions — written to PostgreSQL, read by Asterisk via ODBC realtime.
+        PJSIP accounts — written to PostgreSQL, read by Asterisk via ODBC realtime.
       </p>
+      <p>New extensions include call routing automatically. Use the extension number
+        as both the SIP account and authentication username. Optionally create
+        voicemail for unanswered, busy or unavailable phones.
+        Edit existing routing on the Dialplan page and mailbox settings on the
+        Voicemail page. Deletion retains routing/mailboxes and does not terminate calls.</p>
 
       <div id="ext-alert" class="alert error" style="display:none;"></div>
 
@@ -55,32 +60,44 @@
           <input type="hidden" id="ext-id">
           <div class="form-row">
             <div class="nb-form-group">
-              <label class="nb-label">Extension Number</label>
-              <input class="nb-input" id="ext-number" name="extension" placeholder="e.g. 1001" required>
+              <label class="nb-label" for="ext-number">Extension Number / SIP Login</label>
+              <input class="nb-input" id="ext-number" name="extension" placeholder="e.g. 101" inputmode="numeric" maxlength="32" required>
             </div>
             <div class="nb-form-group">
-              <label class="nb-label">Name</label>
-              <input class="nb-input" id="ext-name" name="name" placeholder="John Doe" required>
+              <label class="nb-label" id="ext-name-label" for="ext-name">Display Name</label>
+              <input class="nb-input" id="ext-name" name="display_name" maxlength="40" placeholder="Alice">
             </div>
           </div>
           <div class="form-row">
             <div class="nb-form-group">
               <label class="nb-label">SIP Password (Secret)</label>
-              <input class="nb-input" id="ext-secret" name="secret" placeholder="••••••••" required>
+              <input class="nb-input" id="ext-secret" name="secret" type="password" maxlength="80" autocomplete="new-password" placeholder="Required on creation; blank preserves on edit">
+            </div>
+          </div>
+          <div id="ext-create-options">
+            <label class="nb-label" for="ext-voicemail">
+              <input id="ext-voicemail" type="checkbox" role="switch"> Create voicemail
+            </label>
+            <div id="ext-voicemail-fields" hidden>
+              <div class="nb-form-group">
+                <label class="nb-label" for="ext-pin">Voicemail PIN (digits only)</label>
+                <input class="nb-input" id="ext-pin" type="password" inputmode="numeric" maxlength="80" autocomplete="new-password">
+              </div>
+              <div class="nb-form-group">
+                <label class="nb-label" for="ext-email">Voicemail email (optional)</label>
+                <input class="nb-input" id="ext-email" type="email" maxlength="80" autocomplete="email">
+              </div>
+            </div>
+          </div>
+          <div id="ext-edit-options" hidden>
+            <div class="nb-form-group">
+              <label class="nb-label" for="ext-mailboxes">Existing mailbox references</label>
+              <input class="nb-input" id="ext-mailboxes" name="mailboxes" maxlength="40" placeholder="1001@default">
             </div>
             <div class="nb-form-group">
-              <label class="nb-label">Email</label>
-              <input class="nb-input" id="ext-email" name="email" type="email" placeholder="john@example.com">
+              <label class="nb-label" for="ext-context">Context</label>
+              <input class="nb-input" id="ext-context" name="context" value="internal" maxlength="40">
             </div>
-          </div>
-          <div class="nb-form-group">
-            <label class="nb-label">Context</label>
-            <input class="nb-input" id="ext-context" name="context" value="from-internal">
-          </div>
-          <div style="display:flex; gap:1rem; align-items:center; margin-top:1rem;">
-            <label style="font-weight:800; font-size:0.85rem; text-transform:uppercase;">
-              <input type="checkbox" id="ext-vm"> Voicemail Enabled
-            </label>
           </div>
           <div style="display:flex; gap:1rem; margin-top:1rem;">
             <button type="submit" class="nb-btn primary">Save Extension</button>
@@ -99,29 +116,29 @@
             <thead>
               <tr>
                 <th>Number</th>
-                <th>Name</th>
+                <th>Caller ID</th>
                 <th>Technology</th>
                 <th>Context</th>
-                <th>Voicemail</th>
-                <th>Active</th>
+                <th>Mailbox references</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="ext-table-body"></tbody>
           </table>
         </div>
+        <button class="nb-btn small" id="ext-prev">Previous</button>
+        <span id="ext-page"></span>
+        <button class="nb-btn small" id="ext-next">Next</button>
       </div>
     </div>
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api, get, post, put, del } from "./js/api.js";
+    import { get, post, put, del } from "./js/api.js";
 
     const form = document.getElementById("ext-form");
     const alertEl = document.getElementById("ext-alert");
@@ -129,27 +146,81 @@
     const countEl = document.getElementById("ext-count");
     const openAdd = document.getElementById("open-add-ext");
     const cancelBtn = document.getElementById("ext-cancel");
+    const voicemailToggle = document.getElementById("ext-voicemail");
+    const pinInput = document.getElementById("ext-pin");
+    let pinEdited = false;
+
+    function updateVoicemailFields() {
+      document.getElementById("ext-voicemail-fields").hidden = !voicemailToggle.checked;
+      if (!pinEdited) {
+        const number = document.getElementById("ext-number").value.trim();
+        pinInput.value = number ? "0" + number : "";
+      }
+    }
+    voicemailToggle.addEventListener("change", updateVoicemailFields);
+    pinInput.addEventListener("input", () => { pinEdited = true; });
+    document.getElementById("ext-number").addEventListener("input", updateVoicemailFields);
 
     let editingId = null;
+    let page = 1;
+    const perPage = 50;
+    const previous = document.getElementById("ext-prev");
+    const next = document.getElementById("ext-next");
 
     async function load() {
-      const data = await get("/extensions");
+      const data = await get(`/extensions?page=${page}&per_page=${perPage}`);
+      if (!data.items.length && page > 1) {
+        page--;
+        return load();
+      }
       tbody.innerHTML = "";
       countEl.textContent = data.total;
+      previous.disabled = page === 1;
+      next.disabled = page * perPage >= data.total;
+      document.getElementById("ext-page").textContent = `Page ${page}`;
       data.items.forEach((e) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${e.extension}</strong></td>
-          <td>${e.name}</td>
-          <td>${e.technology}</td>
-          <td>${e.context}</td>
-          <td>${e.voicemail_enabled ? '<span class="nb-badge success small">yes</span>' : '<span class="nb-badge dark small">no</span>'}</td>
-          <td>${e.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small" onclick="app.editExt(${e.id})">Edit</button>
-            <button class="nb-btn small danger" onclick="app.deleteExt(${e.id}, '${e.extension}')">Delete</button>
-          </td>
-        `;
+        for (const value of [e.id, e.callerid, "PJSIP", e.context, e.mailboxes]) {
+          const cell = document.createElement("td");
+          cell.textContent = value || "—";
+          tr.appendChild(cell);
+        }
+        const actions = document.createElement("td");
+        actions.className = "actions";
+        const edit = document.createElement("button");
+        edit.className = "nb-btn small";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", () => {
+          resetForm();
+          editingId = e.id;
+          document.getElementById("ext-create-options").hidden = true;
+          document.getElementById("ext-edit-options").hidden = false;
+          document.getElementById("ext-name-label").textContent = "Caller ID (maximum 40 characters)";
+          document.getElementById("ext-id").value = e.id;
+          document.getElementById("ext-number").value = e.id;
+          document.getElementById("ext-number").readOnly = true;
+          document.getElementById("ext-name").value = e.callerid || "";
+          document.getElementById("ext-secret").value = "";
+          document.getElementById("ext-context").value = e.context || "internal";
+          document.getElementById("ext-mailboxes").value = e.mailboxes || "";
+          cancelBtn.style.display = "inline-block";
+        });
+        const remove = document.createElement("button");
+        remove.className = "nb-btn small danger";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          if (!confirm(`Delete endpoint ${e.id}? Mailboxes, routing and active calls remain unchanged.`)) return;
+          try {
+            const result = await del(`/extensions/${encodeURIComponent(e.id)}`);
+            showAlert(`${result.message}. Retained shared objects: ${result.retained_shared_objects.join(", ") || "none"}. Remaining references: ${JSON.stringify(result.remaining_references)}. ${result.warning}`);
+            if (editingId === e.id) resetForm();
+            await load();
+          } catch (err) {
+            showAlert(err.message);
+          }
+        });
+        actions.append(edit, remove);
+        tr.appendChild(actions);
         tbody.appendChild(tr);
       });
     }
@@ -162,67 +233,60 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const payload = {
-        extension: document.getElementById("ext-number").value,
-        name: document.getElementById("ext-name").value,
+        extension: document.getElementById("ext-number").value.trim(),
         secret: document.getElementById("ext-secret").value,
-        context: document.getElementById("ext-context").value || "from-internal",
-        email: document.getElementById("ext-email").value,
-        voicemail_enabled: document.getElementById("ext-vm").checked,
-        is_active: true,
       };
+      if (editingId) {
+        payload.callerid = document.getElementById("ext-name").value;
+        payload.context = document.getElementById("ext-context").value || "internal";
+        payload.mailboxes = document.getElementById("ext-mailboxes").value;
+      } else {
+        payload.display_name = document.getElementById("ext-name").value.trim();
+        if (voicemailToggle.checked) {
+          payload.voicemail = {
+            pin: pinInput.value,
+            email: document.getElementById("ext-email").value.trim(),
+          };
+        }
+      }
       try {
+        const creating = !editingId;
         if (editingId) {
-          await put(`/extensions/${editingId}`, payload);
+          await put(`/extensions/${encodeURIComponent(editingId)}`, payload);
         } else {
           await post("/extensions", payload);
         }
-        form.reset();
-        editingId = null;
-        document.getElementById("ext-id").value = "";
-        cancelBtn.style.display = "none";
+        resetForm();
+        showAlert(creating
+          ? "Extension and call routing created. Register your phone using the extension number."
+          : "Extension updated. Existing routing and voicemail settings remain unchanged.");
         await load();
       } catch (err) {
         showAlert(err.message || "Failed to save extension");
       }
     });
 
-    cancelBtn.addEventListener("click", () => {
+    function resetForm() {
       form.reset();
       editingId = null;
+      pinEdited = false;
+      voicemailToggle.checked = false;
+      pinInput.value = "";
+      document.getElementById("ext-email").value = "";
+      document.getElementById("ext-create-options").hidden = false;
+      document.getElementById("ext-edit-options").hidden = true;
+      document.getElementById("ext-voicemail-fields").hidden = true;
+      document.getElementById("ext-name-label").textContent = "Display Name";
       document.getElementById("ext-id").value = "";
+      document.getElementById("ext-number").readOnly = false;
       cancelBtn.style.display = "none";
-    });
+    }
 
-    openAdd.addEventListener("click", () => {
-      form.reset();
-      editingId = null;
-      document.getElementById("ext-id").value = "";
-      cancelBtn.style.display = "none";
-    });
-
-    window.app = {
-      editExt: async (id) => {
-        const data = await get("/extensions");
-        const e = data.items.find((x) => x.id === id);
-        if (!e) return;
-        document.getElementById("ext-id").value = e.id;
-        document.getElementById("ext-number").value = e.extension;
-        document.getElementById("ext-name").value = e.name;
-        document.getElementById("ext-secret").value = e.secret || "";
-        document.getElementById("ext-context").value = e.context;
-        document.getElementById("ext-email").value = e.email || "";
-        document.getElementById("ext-vm").checked = e.voicemail_enabled;
-        editingId = e.id;
-        cancelBtn.style.display = "inline-block";
-      },
-      deleteExt: async (id, number) => {
-        if (!confirm(`Delete extension ${number}?`)) return;
-        await del(`/extensions/${id}`);
-        await load();
-      },
-    };
-
-    load();
+    cancelBtn.addEventListener("click", resetForm);
+    openAdd.addEventListener("click", resetForm);
+    previous.addEventListener("click", () => { page--; load().catch(err => showAlert(err.message)); });
+    next.addEventListener("click", () => { page++; load().catch(err => showAlert(err.message)); });
+    load().catch(err => showAlert(err.message));
   </script>
 </body>
 </html>

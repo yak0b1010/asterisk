@@ -42,9 +42,9 @@
         </div>
       </header>
 
-      <h2 class="page-title">User Management</h2>
+      <h2 class="page-title">Administrator Management</h2>
       <p style="color:var(--nb-darkgray); font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">
-        Admin / operator accounts for the web appliance. Admin-only.
+        Dashboard administrators only. Employees use SIP extensions, not dashboard accounts.
       </p>
 
       <div id="user-alert" class="alert error" style="display:none;"></div>
@@ -71,7 +71,6 @@
             <div class="nb-form-group">
               <label class="nb-label">Role</label>
               <select class="nb-input" id="user-role" name="role">
-                <option value="operator">Operator</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -95,7 +94,6 @@
                 <th>Username</th>
                 <th>Email</th>
                 <th>Role</th>
-                <th>Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -107,13 +105,11 @@
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api, get, post, put, del } from "./js/api.js";
+    import { api, get, post, put, del, tableRow } from "./js/api.js";
 
     const form = document.getElementById("user-form");
     const alertEl = document.getElementById("user-alert");
@@ -128,18 +124,8 @@
       tbody.innerHTML = "";
       countEl.textContent = data.length;
       data.forEach((u) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${u.username}</strong></td>
-          <td>${u.email}</td>
-          <td><span class="nb-badge ${u.role === 'admin' ? 'danger' : 'info'}">${u.role}</span></td>
-          <td>${u.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small" onclick="app.editUser(${u.id})">Edit</button>
-            ${u.id == 1 ? '<span class="nb-btn small" style="opacity:0.5;cursor:default;">—</span>' : `<button class="nb-btn small danger" onclick="app.deleteUser(${u.id}, '${u.username}')">Delete</button>`}
-          </td>
-        `;
-        tbody.appendChild(tr);
+        tableRow(tbody, [u.username, u.email, u.role],
+          [["Edit", () => app.editUser(u.id)], ["Delete", () => app.deleteUser(u.id, u.username)]]);
       });
     }
 
@@ -206,7 +192,7 @@
       },
     };
 
-    load();
+    load().catch((error) => showAlert(error.message));
   </script>
 </body>
 </html>

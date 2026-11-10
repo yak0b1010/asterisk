@@ -57,7 +57,7 @@
         <div class="stat-card accent-green">
           <div class="stat-icon">👥</div>
           <p class="stat-value" id="stat-users">—</p>
-          <p class="stat-label">Users</p>
+          <p class="stat-label">Administrators</p>
         </div>
         <div class="stat-card accent-orange">
           <div class="stat-icon">📋</div>
@@ -102,9 +102,7 @@
 
   <script>
     // Point frontend API calls to the backend (Flask on port 5000)
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
@@ -114,7 +112,7 @@
       try {
         const data = await api("/dashboard/stats");
         document.getElementById("stat-extensions").textContent = data.extensions_total;
-        document.getElementById("stat-calls").textContent = data.active_calls;
+        document.getElementById("stat-calls").textContent = data.active_calls ?? "Unavailable";
         document.getElementById("stat-users").textContent = data.users_total;
         document.getElementById("stat-queues").textContent = data.queues_total;
       } catch (e) {
@@ -130,7 +128,7 @@
         if (result.ok) {
           el.textContent = "ONLINE";
           el.className = "nb-badge success";
-          msg.textContent = "Backend API is reachable on port 5000.";
+          msg.textContent = "Backend API is reachable through the frontend proxy.";
         } else {
           el.textContent = "OFFLINE";
           el.className = "nb-badge danger";

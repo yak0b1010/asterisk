@@ -60,13 +60,13 @@
             </div>
             <div class="nb-form-group">
               <label class="nb-label">Context</label>
-              <input class="nb-input" id="dp-context" name="context" value="from-internal" required>
+              <input class="nb-input" id="dp-context" name="context" value="internal" required>
             </div>
           </div>
           <div class="form-row">
             <div class="nb-form-group">
-              <label class="nb-label">Destination</label>
-              <input class="nb-input" id="dp-destination" name="destination" placeholder="e.g. EXTENSION / 1001 / queue1" required>
+              <label class="nb-label">Application arguments</label>
+              <input class="nb-input" id="dp-destination" name="destination" placeholder="e.g. ${PJSIP_DIAL_CONTACTS(1001)},20">
             </div>
             <div class="nb-form-group">
               <label class="nb-label">Priority</label>
@@ -77,10 +77,6 @@
             <div class="nb-form-group">
               <label class="nb-label">Application</label>
               <input class="nb-input" id="dp-application" name="application" value="Dial" required>
-            </div>
-            <div class="nb-form-group">
-              <label class="nb-label">Description</label>
-              <input class="nb-input" id="dp-description" name="description" placeholder="e.g. Admin extensions 1000-1999">
             </div>
           </div>
           <div style="display:flex; gap:1rem; margin-top:1rem;">
@@ -104,8 +100,6 @@
                 <th>Destination</th>
                 <th>Priority</th>
                 <th>Application</th>
-                <th>Description</th>
-                <th>Active</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -117,13 +111,11 @@
   </div>
 
   <script>
-    window.API_BASE = window.location.origin
-      .replace(':8080', ':5000')
-      .replace(':80', ':5000');
+    window.API_BASE = "";
   </script>
   <script type="module" src="./js/app.js?v=2"></script>
   <script type="module">
-    import { api, get, post, put, del } from "./js/api.js";
+    import { api, get, post, put, del, tableRow } from "./js/api.js";
 
     const form = document.getElementById("dp-form");
     const alertEl = document.getElementById("dp-alert");
@@ -138,21 +130,8 @@
       tbody.innerHTML = "";
       countEl.textContent = data.length;
       data.forEach((d) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><strong>${d.pattern}</strong></td>
-          <td>${d.context}</td>
-          <td>${d.destination}</td>
-          <td>${d.priority}</td>
-          <td>${d.application}</td>
-          <td>${d.description || "—"}</td>
-          <td>${d.is_active ? '<span class="nb-badge success small">active</span>' : '<span class="nb-badge dark small">off</span>'}</td>
-          <td class="actions">
-            <button class="nb-btn small" onclick="app.editDp(${d.id})">Edit</button>
-            <button class="nb-btn small danger" onclick="app.deleteDp(${d.id})">Delete</button>
-          </td>
-        `;
-        tbody.appendChild(tr);
+        tableRow(tbody, [d.pattern, d.context, d.destination, d.priority, d.application],
+          [["Edit", () => app.editDp(d.id)], ["Delete", () => app.deleteDp(d.id)]]);
       });
     }
 
@@ -169,8 +148,6 @@
         destination: document.getElementById("dp-destination").value,
         priority: parseInt(document.getElementById("dp-priority").value) || 1,
         application: document.getElementById("dp-application").value,
-        description: document.getElementById("dp-description").value,
-        is_active: true,
       };
       try {
         if (editingId) {
@@ -219,7 +196,6 @@
         document.getElementById("dp-destination").value = d.destination;
         document.getElementById("dp-priority").value = d.priority;
         document.getElementById("dp-application").value = d.application;
-        document.getElementById("dp-description").value = d.description || "";
         editingId = d.id;
         cancelBtn.style.display = "inline-block";
       },
@@ -230,7 +206,7 @@
       },
     };
 
-    load();
+    load().catch((error) => showAlert(error.message));
   </script>
 </body>
 </html>
