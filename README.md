@@ -1,7 +1,7 @@
 # Asterisk Management Appliance
 
 A Docker Compose PBX with a browser-based administrator dashboard. The current
-stack is **Asterisk 22.11.0, PostgreSQL 16, Flask/Gunicorn, and vanilla
+stack is **Certified Asterisk 22.8-cert4 (Alpine 3.24), PostgreSQL 16, Flask/Gunicorn, and vanilla
 JavaScript served by Nginx**.
 
 ## Contents

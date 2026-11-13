@@ -85,7 +85,7 @@ if [ -n "${AMI_PASSWORD}" ]; then
 enabled = yes
 webenabled = no
 port = 5038
-bindaddr = 127.0.0.1
+bindaddr = 0.0.0.0
 
 [backend]
 secret = ${AMI_PASSWORD}
@@ -173,4 +173,4 @@ if [ ! -s "${KEYDIR}/asterisk.pem" ]; then
 fi
 
 # Hand off to the base image entrypoint with the original container command.
-exec /usr/local/bin/entrypoint.sh "$@"
+exec "$@"
