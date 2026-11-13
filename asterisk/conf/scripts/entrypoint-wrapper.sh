@@ -85,7 +85,7 @@ if [ -n "${AMI_PASSWORD}" ]; then
 enabled = yes
 webenabled = no
 port = 5038
-bindaddr = 127.0.0.1
+bindaddr = 0.0.0.0
 
 [backend]
 secret = ${AMI_PASSWORD}
