@@ -173,4 +173,4 @@ if [ ! -s "${KEYDIR}/asterisk.pem" ]; then
 fi
 
 # Hand off to the base image entrypoint with the original container command.
-exec /usr/local/bin/entrypoint.sh "$@"
+exec "$@"

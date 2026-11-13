@@ -18,17 +18,20 @@ for dashboard provisioning and a calling example.
 
 ## Image and layout
 
-The approved base is regular Asterisk **22.11.0 on Debian Trixie amd64**:
+The approved base is Certified Asterisk **22.8-cert4 on Alpine 3.24 amd64**:
 
 ```text
-andrius/asterisk:22.11.0_debian-trixie-amd64@sha256:887595176c64d3bc10387f198b6248347cb5a91969f377b1b64641aeaf11acea
+andrius/asterisk:22.8-cert4_alpine-3.24-amd64@sha256:ff8cf9fca1d24633566873f918f37ef35b2a245a69d7c75fa8da6953d15639ca
 ```
 
 Compose and the PBX Makefile construct `BASE_IMAGE` from the root `.env`
 image/tag/digest settings. The Dockerfile has the same fallback pin.
-The base supplies `pbx_realtime.so`; the abandoned compilation stage is gone.
-The Dockerfile installs PostgreSQL ODBC, core GSM prompts and WAV hold music.
-Installed hold music still has a runtime path warning; see the findings below.
+This base includes ODBC modules but **does not supply `pbx_realtime.so`**:
+database-backed dialplan switching remains blocked. No compilation or foreign
+binary modules are added. Earlier validation below describes the previous image,
+not validation of this Alpine pin.
+The Dockerfile installs PostgreSQL ODBC, OpenSSL, core GSM prompts and WAV hold
+music using `apk`, exposing media at the existing persistent volume paths.
 
 ```text
 Dockerfile
